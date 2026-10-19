@@ -13,10 +13,10 @@ def positive(value):
     return result
 
 
-def source_context(name):
+def source_context(name, position=None):
     if name == "virtual":
         from .virtual import VirtualMonitor
-        return VirtualMonitor()
+        return VirtualMonitor(position=position)
     return nullcontext(None)
 
 
@@ -28,6 +28,8 @@ def parse_args(argv=None):
                         help="Auto prefers NVENC and falls back to CPU before video starts")
     parser.add_argument("--pattern", choices=("ball", "scroll"), default="ball",
                         help="Test pattern: moving ball or inexpensive scrolling color bars")
+    parser.add_argument("--position", choices=("left", "right", "above", "below"),
+                        help="Place the virtual tablet on this outside edge of the existing desktop")
     parser.add_argument("--port", type=positive, default=27183)
     parser.add_argument("--width", type=positive, default=1920)
     parser.add_argument("--height", type=positive, default=1280)
@@ -37,6 +39,8 @@ def parse_args(argv=None):
     parser.add_argument("--benchmark", type=positive, metavar="SECONDS",
                         help="Measure host encoding for this many seconds after a 2-second warmup; no USB")
     args = parser.parse_args(argv)
+    if args.position is not None and args.source != "virtual":
+        parser.error("--position requires --source virtual")
     if args.port > 65535 or args.fps > 144:
         parser.error("Port must be <= 65535 and FPS <= 144")
     if args.width % 2 or args.height % 2 or max(args.width, args.height) > 4096:
@@ -61,7 +65,7 @@ def main(argv=None):
             return 0
         if args.benchmark:
             from .benchmark import run_benchmark
-            with source_context(args.source) as monitor:
+            with source_context(args.source, args.position) as monitor:
                 run_benchmark(args, monitor)
             return 0
         with socket.socket() as listener:
@@ -76,7 +80,7 @@ def main(argv=None):
                     connection.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
                     connection.settimeout(3)
                     try:
-                        with source_context(args.source) as monitor:
+                        with source_context(args.source, args.position) as monitor:
                             stream_video(connection, args, monitor, send_header=True)
                     except (OSError, RuntimeError, ValueError) as exc:
                         print(f"Session ended: {exc}; waiting for reconnection", file=sys.stderr, flush=True)

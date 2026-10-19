@@ -2,6 +2,7 @@
 
 import os
 import threading
+import sys
 
 
 BUS_NAME = "org.gnome.Mutter.ScreenCast"
@@ -18,7 +19,7 @@ class VirtualMonitor:
     fails or the process is terminated. No saved monitor configuration is edited.
     """
 
-    def __init__(self, timeout=10):
+    def __init__(self, timeout=10, position=None):
         self.timeout = timeout
         self.connection = None
         self.session_path = None
@@ -28,6 +29,50 @@ class VirtualMonitor:
         self.loop = None
         self.thread = None
         self.subscriptions = []
+        self.position = position
+        self.layout = None
+        self.layout_before = None
+        self.position_applied = False
+        self.position_connector = None
+        self.applied_signature = None
+        self.cleanup_checked = False
+        self.restore_layout = False
+
+    def apply_position(self):
+        if self.position is None or self.position_applied:
+            return
+        from .layout import LayoutError, layout_signature
+        try:
+            connector = self.layout.place(self.layout_before, self.position)
+        except LayoutError:
+            # Even a rejected placement may follow Mutter's automatic hotplug
+            # reflow. Restore the pre-session desktop on this failure path too.
+            try:
+                current = self.layout.state()
+                existing = {tuple(monitor[0]) for monitor in self.layout_before[1]}
+                added = [monitor[0][0] for monitor in current[1]
+                         if tuple(monitor[0]) not in existing and monitor[0][0].startswith("Meta-")]
+                if len(added) == 1:
+                    self.position_connector = added[0]
+                    self.applied_signature = layout_signature(current)
+            except LayoutError:
+                pass
+            raise
+        self.position_applied = True
+        self.position_connector = connector
+        self.applied_signature = layout_signature(self.layout.state())
+        print(f"Tablet position: {self.position} ({connector})", flush=True)
+
+    def prepare_cleanup(self):
+        """Check before PipeWire shutdown whether the user rearranged displays."""
+        if self.applied_signature is None or self.cleanup_checked:
+            return
+        from .layout import LayoutError, layout_signature
+        self.cleanup_checked = True
+        try:
+            self.restore_layout = layout_signature(self.layout.state()) == self.applied_signature
+        except LayoutError as exc:
+            print(f"Layout restoration skipped: {exc}", file=sys.stderr, flush=True)
 
     def _call(self, path, interface, method, parameters=None):
         return self.connection.call_sync(
@@ -64,6 +109,10 @@ class VirtualMonitor:
                     None, None,
                 )
                 self.connection.set_exit_on_close(False)
+                if self.position is not None:
+                    from .layout import MonitorLayout
+                    self.layout = MonitorLayout(Gio.bus_get_sync(Gio.BusType.SESSION, None))
+                    self.layout_before = self.layout.state()
                 self.session_path = self._call(
                     ROOT, BUS_NAME, "CreateSession", GLib.Variant("(a{sv})", ({},)),
                 ).unpack()[0]
@@ -101,6 +150,7 @@ class VirtualMonitor:
             raise
 
     def close(self):
+        self.prepare_cleanup()
         if self.connection:
             for subscription in self.subscriptions:
                 self.connection.signal_unsubscribe(subscription)
@@ -115,6 +165,13 @@ class VirtualMonitor:
             except self.GLib.Error:
                 pass
             self.connection = None
+        if self.restore_layout:
+            from .layout import LayoutError
+            self.restore_layout = False
+            try:
+                self.layout.restore(self.layout_before, self.position_connector)
+            except LayoutError as exc:
+                print(f"Layout restoration skipped: {exc}", file=sys.stderr, flush=True)
         self.closed.set()
         if self.loop:
             self.loop.quit()

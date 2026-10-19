@@ -29,7 +29,8 @@ Preview package commands with `./scripts/install-deps.sh --dry-run`.
 The dependency installer also adds **OpenPadDisplay** to your Ubuntu application
 menu when run as your desktop user. If dependencies are already installed, run
 `./scripts/install-desktop.py` without sudo. Open the app, connect the tablet by
-USB, choose a resolution and refresh rate and click **Ligar tablet**. **Desligar tablet**, or
+USB, choose a resolution, refresh rate and tablet position, then click **Ligar tablet**.
+**Desligar tablet**, or
 closing the window, stops its stream and removes its virtual monitor. The launcher
 uses the installed Android app; install the APK first as described below. Keep
 this checkout at its current location, or rerun the launcher installer after moving it.
@@ -103,6 +104,29 @@ more image detail. The configured bitrate remains unchanged. Higher refresh
 rates also increase workload; the available
 rate still depends on the tablet, compositor and complete streaming path.
 
+The **Posição do tablet** control shows a preview and places the tablet to the
+**left**, **right**, **above** or **below** the existing desktop. With several
+monitors, it uses the outside edge of the group and keeps the existing screens
+together. Choose the position before connecting; controls are locked during a
+session. The launcher remembers the position in
+`~/.config/openpaddisplay/settings.json` (or under `XDG_CONFIG_HOME`) and reapplies
+it on reconnect. The default is **right**.
+
+Placement uses a temporary GNOME configuration. On disconnect, the application
+restores the pre-session arrangement when the display layout was left unchanged
+during the session. If you rearrange screens in GNOME Settings or connect another
+monitor, it avoids replaying an outdated layout. It does not write GNOME's saved
+monitor configuration. This feature uses the existing GNOME Wayland backend and
+needs no Android APK update.
+
+The CLI supports the same positions, for example:
+
+```bash
+./scripts/extend-usb.sh --position left
+```
+
+Omitting `--position` on the CLI keeps GNOME's automatic placement.
+
 For a lighter mode:
 
 ```bash
@@ -173,6 +197,14 @@ refresh negotiation and cleanup, including failure recovery:
 
 ```bash
 OPENPADDISPLAY_TEST_VIRTUAL=1 PYTHONPATH=linux /usr/bin/python3 -m unittest discover -s linux/tests -v
+```
+
+The virtual display tests also check all four tablet positions and restoration
+of the existing layout. To test launcher controls and saved preferences without
+starting a stream, with GTK 3 and Xvfb installed:
+
+```bash
+OPENPADDISPLAY_TEST_DESKTOP=1 PYTHONPATH=linux xvfb-run -a /usr/bin/python3 -m unittest discover -s linux/tests -p test_desktop.py -v
 ```
 
 On an NVIDIA host, also set `OPENPADDISPLAY_TEST_NVENC=1` to test real hardware

@@ -157,6 +157,10 @@ def _stream_pipeline(Gst, connection, args, monitor, encoder, send_header):
                 raise RuntimeError("Encoder returned a frame without PTS")
             payload = buffer.extract_dup(0, buffer.get_size())
             if frames == 0:
+                # The output only exists once PipeWire has negotiated and
+                # produced video. Position it once before publishing a session.
+                if monitor and getattr(args, "position", None) is not None:
+                    monitor.apply_position()
                 print(f"Streaming with {encoder} ({pipeline.get_by_name('encoder').get_factory().get_name()})", flush=True)
                 if send_header:
                     write_header(connection, args.width, args.height, args.fps,
@@ -188,4 +192,6 @@ def _stream_pipeline(Gst, connection, args, monitor, encoder, send_header):
             raise EncoderStartupError(str(exc)) from exc
         raise
     finally:
+        if monitor and getattr(args, "position", None) is not None:
+            monitor.prepare_cleanup()
         pipeline.set_state(Gst.State.NULL)
