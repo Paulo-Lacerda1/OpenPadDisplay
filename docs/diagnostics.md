@@ -6,17 +6,22 @@ hipótese baseada nas amostras disponíveis, não uma medição de latência tot
 
 ## Abrir o painel
 
-O APK **0.4.0** acrescenta o botão **Diagnóstico** no canto superior direito do
-tablet. Toca para abrir o painel e em **Ocultar diagnóstico** para voltar à
-imagem sem o painel. A preferência de visibilidade é guardada. O conteúdo pode
-ser percorrido e os textos de métricas/resultados podem ser selecionados.
+O APK **0.4.1** mostra apenas o vídeo por defeito. Na aplicação **do computador**,
+liga o tablet e clica em **Mostrar métricas no tablet**. Aparecem só as métricas
+sobre o vídeo, sem botões, caixas de confirmação nem controlos de teste no tablet.
+Clica em **Ocultar métricas do tablet** para deixar a imagem completamente limpa.
+A alteração é imediata e não reinicia a transmissão. Ao desligar, o launcher
+oculta as métricas e repõe a opção desativada.
 
-Os FPS locais, o decoder, o encoder anunciado e a frequência do painel aparecem
-também quando o servidor usa o protocolo anterior. Para receber captura, envio
-e descartes do computador, ativa **Enviar métricas ao tablet (APK 0.4+)** no
-launcher antes de ligar, ou passa `--diagnostics` ao servidor. Esta opção ativa
-o protocolo v2 e requer o novo APK. O protocolo v1 continua a ser o default;
-o novo APK aceita ambos e mostra claramente quando faltam métricas do host.
+O launcher envia as métricas do host em v2 durante a sessão, mesmo com o painel
+oculto. O botão controla apenas a visibilidade. O controlo usa a ligação ADB USB
+já autorizada; falhas ou APKs antigos são indicados no computador, sem fingir que
+a alteração foi aplicada. O estado selecionado é reaplicado após uma reconexão.
+
+Os FPS locais, o decoder, o encoder anunciado e a frequência do painel também
+estão disponíveis com servidores v1. Na linha de comandos, passa `--diagnostics`
+ao servidor para enviar captura, envio e descartes do host. O protocolo v1
+continua a ser o default da CLI; o novo APK aceita ambos os protocolos.
 
 ## O que significam as métricas
 
@@ -46,24 +51,25 @@ ou a latência ponta a ponta só com estes contadores.
 
 ## Teste guiado: começar por uma fonte animada
 
-1. Liga o tablet por USB e confirma a autorização ADB. Encerra uma sessão ativa
-   pelo launcher antes de iniciar um servidor de teste na mesma porta.
-2. Usa uma fonte continuamente animada. Para um teste inicial leve:
-
-   ```bash
-   ./scripts/test-usb.sh --skip-install --diagnostics --encoder auto --pattern scroll --width 960 --height 640 --fps 60 --bitrate 4000
-   ```
-
-3. Abre o diagnóstico no tablet e toca **Testar ligação (15 s)**. Os primeiros
-   3 segundos são de estabilização; as amostras seguintes alimentam o resultado.
-   No desktop real, confirma que vais manter movimento contínuo. No padrão
-   animado a confirmação não é necessária. Mantém a aplicação visível.
-4. Consulta os contadores do host no terminal e compara-os com os do tablet. Se
-   uma etapa não estiver medida ou disponível, o resultado é inconclusivo para
-   essa etapa.
+1. Liga o tablet por USB na aplicação do computador.
+2. Clica em **Testar ligação (15 s)** no computador e lê a indicação para manter
+   uma janela em movimento. A confirmação e o cancelamento ficam no computador.
+3. Mantém movimento no monitor do tablet. Os primeiros 3 segundos estabilizam a
+   ligação; as amostras seguintes alimentam o resultado.
+4. O resultado abre numa janela **no computador**. O tablet continua a mostrar
+   apenas o vídeo e, se tiveres ativado o botão, as métricas.
 5. Repete no modo que queres usar e muda apenas uma variável de cada vez:
-   resolução, frequência, bitrate ou encoder. Termina cada servidor com Ctrl+C
-   antes de iniciar o seguinte.
+   resolução, frequência, bitrate ou encoder.
+
+Para comparar com uma fonte animada independente do desktop, encerra primeiro a
+sessão do launcher e executa um servidor de teste, observando os logs:
+
+```bash
+./scripts/test-usb.sh --skip-install --diagnostics --encoder auto --pattern scroll --width 960 --height 640 --fps 60 --bitrate 4000
+```
+
+Termina com Ctrl+C antes de iniciar outra sessão. Os controlos do launcher são
+ativados nas ligações iniciadas pelo próprio launcher.
 
 O teste `scroll` separa a geração contínua da dependência das alterações do
 desktop. No monitor estendido, move uma janela continuamente durante a recolha.

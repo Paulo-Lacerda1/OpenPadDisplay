@@ -155,18 +155,18 @@ usage over each reporting interval. Capture buffers include idle keepalive copie
 Android logs received FPS, rendered callbacks, host encoder, decoder and panel
 refresh rate. Callbacks do not prove distinct scanouts or end-to-end latency.
 
-Earlier APKs on the `debug` branch display a permanent diagnostic overlay. The
-0.4 app uses the optional panel described below.
+The **0.4.1 Android app** shows only video until you press **Mostrar métricas no
+tablet** in the computer application. The same button hides the metrics immediately,
+without restarting the video; no buttons or test controls appear on the tablet.
+The **Testar ligação (15 s)** button and its results also stay on the computer.
 
-The **0.4 Android app** adds an optional **Diagnóstico** panel and a 15-second
-guided check. It shows reception, decoder output and rendered callbacks, actual
-panel frequency and encoder/decoder information. Host capture, raw cadence drops,
-queue and send metrics are available when **Enviar métricas ao tablet (APK 0.4+)**
-is enabled in the launcher or the server runs with `--diagnostics`. This is an
-explicit v2 protocol opt-in; default v1 sessions remain compatible with existing
-apps, and the new app accepts both. Missing data and unmeasured USB loss are
-labelled. See [the diagnostic guide](docs/diagnostics.md) for instructions and
-the limits of each measurement.
+The launcher sends host telemetry using protocol v2, even while the overlay is
+hidden. The CLI keeps protocol v1 by default; add `--diagnostics` for host telemetry.
+The new APK accepts both protocols. Reception, decoder output, rendered callbacks,
+panel frequency and encoder/decoder information are shown separately. Missing data
+and unmeasured USB loss are labelled. Live controls use the existing authorized ADB
+USB connection and require APK 0.4.1+. See [the diagnostic guide](docs/diagnostics.md)
+for instructions and measurement limits.
 
 Run a repeatable **host-only** benchmark with an animated test source, a 2-second
 warmup, and an 8-second measurement window:

@@ -5,6 +5,8 @@ from pathlib import Path
 import signal
 import subprocess
 import threading
+import time
+import uuid
 
 import gi
 
@@ -14,6 +16,7 @@ from gi.repository import Gio, GLib, Gtk  # noqa: E402
 
 from .layout import POSITIONS
 from .preferences import load_position, save_position
+from .tablet_control import control_tablet
 
 ROOT = Path(__file__).resolve().parents[2]
 RESOLUTION_PRESETS = (
@@ -114,6 +117,14 @@ class DisplayApplication(Gtk.Application):
         self.resolution = None
         self.position = load_position()
         self.position_buttons = []
+        self.metrics_applied = False
+        self.connected = False
+        self.metrics_revision = 0
+        self.test_cancel = None
+        self.metrics_action = Gio.SimpleAction.new("metrics", GLib.VariantType.new("b"))
+        self.metrics_action.connect("activate", lambda _action, value: self.diagnostics.set_active(value.get_boolean())
+                                    if self.diagnostics.get_sensitive() else None)
+        self.add_action(self.metrics_action)
 
     def do_activate(self):
         if self.window is not None:
@@ -180,9 +191,15 @@ class DisplayApplication(Gtk.Application):
         hint.set_max_width_chars(44)
         position_box.pack_start(hint, False, False, 0)
         box.pack_start(position_box, False, False, 0)
-        self.diagnostics = Gtk.CheckButton(label="Enviar métricas ao tablet (APK 0.4+)")
-        self.diagnostics.set_tooltip_text("Ativa o protocolo v2. Requer o APK com painel de diagnóstico.")
+        self.diagnostics = Gtk.ToggleButton(label="Mostrar métricas no tablet")
+        self.diagnostics.set_tooltip_text("Mostra ou oculta as métricas sem interromper o vídeo. Requer APK 0.4.1+.")
+        self.diagnostics.set_sensitive(False)
+        self.diagnostics.connect("toggled", self.on_metrics_toggled)
         box.pack_start(self.diagnostics, False, False, 0)
+        self.guided = Gtk.Button(label="Testar ligação (15 s)")
+        self.guided.set_sensitive(False)
+        self.guided.connect("clicked", self.on_guided_test)
+        box.pack_start(self.guided, False, False, 0)
         self.button = Gtk.Button(label="Ligar tablet")
         self.button.get_style_context().add_class("suggested-action")
         self.button.connect("clicked", self.on_toggle)
@@ -218,7 +235,7 @@ class DisplayApplication(Gtk.Application):
         resolution_id = self.resolution.get_active_id()
         try:
             self.process = subprocess.Popen(
-                stream_command(ROOT, resolution_id, fps, self.position, self.diagnostics.get_active()),
+                stream_command(ROOT, resolution_id, fps, self.position, diagnostics=True),
                 cwd=ROOT, env={**os.environ, "PYTHONUNBUFFERED": "1"},
                 stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT, text=True, start_new_session=True,
@@ -246,15 +263,141 @@ class DisplayApplication(Gtk.Application):
         self.log_view.get_buffer().set_text("\n".join(self.logs))
         if not self.stopping:
             if line.startswith("Streaming with "):
+                self.connected = True
                 self.status.set_text("Tablet ligado · Monitor estendido")
+                self.sync_metrics()
+                self.guided.set_sensitive(self.test_cancel is None)
             elif line.startswith("Session ended:"):
+                self.connected = False
+                self.metrics_revision += 1
                 self.status.set_text("Ligação interrompida. A aguardar o tablet…")
+                self.diagnostics.set_sensitive(True)
+                self.guided.set_sensitive(False)
+                self.cancel_guided_test()
         return GLib.SOURCE_REMOVE
+
+    def on_metrics_toggled(self, _button):
+        if self.process is not None and not self.stopping and self.diagnostics.get_sensitive():
+            self.sync_metrics()
+
+    def sync_metrics(self):
+        process = self.process
+        self.metrics_revision += 1
+        revision = self.metrics_revision
+        visible = self.diagnostics.get_active()
+        self.diagnostics.set_sensitive(False)
+
+        def worker():
+            try:
+                response = control_tablet("metrics", visible=visible)
+                if response["visible"] != visible:
+                    raise RuntimeError("O tablet não confirmou a alteração das métricas.")
+                error = None
+            except RuntimeError as exc:
+                error = str(exc)
+            GLib.idle_add(self.on_metrics_applied, process, revision, visible, error)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def on_metrics_applied(self, process, revision, visible, error):
+        if self.process is not process or self.stopping or revision != self.metrics_revision:
+            return GLib.SOURCE_REMOVE
+        if error:
+            self.diagnostics.set_active(self.metrics_applied)
+            self.status.set_text(error)
+        else:
+            self.metrics_applied = visible
+            self.diagnostics.set_label("Ocultar métricas do tablet" if visible else "Mostrar métricas no tablet")
+        self.diagnostics.set_sensitive(True)
+        return GLib.SOURCE_REMOVE
+
+    def on_guided_test(self, _button):
+        if self.test_cancel is not None:
+            self.cancel_guided_test()
+            return
+        dialog = Gtk.MessageDialog(transient_for=self.window, modal=True,
+                                   message_type=Gtk.MessageType.QUESTION, buttons=Gtk.ButtonsType.OK_CANCEL,
+                                   text="Teste da ligação · 15 segundos")
+        dialog.format_secondary_text("Move uma janela continuamente no monitor do tablet durante o teste. "
+                                     "A imagem parada não permite avaliar a fluidez. O resultado aparece aqui no computador.")
+        response = dialog.run()
+        dialog.destroy()
+        if response != Gtk.ResponseType.OK or self.process is None or self.stopping:
+            return
+        self.start_guided_test()
+
+    def start_guided_test(self):
+        process = self.process
+        cancelled = threading.Event()
+        self.test_cancel = cancelled
+        test_id = uuid.uuid4().hex
+        self.guided.set_label("Cancelar teste")
+        self.status.set_text("Teste em curso · mantém uma janela em movimento durante 15 s.")
+
+        def worker():
+            result = None
+            try:
+                response = control_tablet("start_test", test_id=test_id, motion=True)
+                deadline = time.monotonic() + 22
+                while response.get("test_state") == "running":
+                    if cancelled.wait(1):
+                        control_tablet("cancel_test", test_id=test_id)
+                        return
+                    if time.monotonic() >= deadline:
+                        control_tablet("cancel_test", test_id=test_id)
+                        raise RuntimeError("O teste excedeu o tempo de espera. Confirma a ligação e repete.")
+                    response = control_tablet("status")
+                    if response.get("test_id") != test_id:
+                        raise RuntimeError("O teste foi interrompido ou substituído no tablet.")
+                result = response.get("test_result") or "Não foi possível recolher métricas."
+            except RuntimeError as exc:
+                result = str(exc)
+            finally:
+                GLib.idle_add(self.on_test_finished, process, cancelled, result)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def cancel_guided_test(self):
+        if self.test_cancel is not None:
+            self.test_cancel.set()
+
+    def on_test_finished(self, process, cancelled, result):
+        if self.test_cancel is not cancelled:
+            return GLib.SOURCE_REMOVE
+        self.test_cancel = None
+        self.guided.set_label("Testar ligação (15 s)")
+        self.guided.set_sensitive(self.connected and not self.stopping)
+        if self.process is not process or self.stopping or not self.connected or cancelled.is_set():
+            if self.process is process and not self.stopping:
+                self.status.set_text("Teste cancelado.")
+            return GLib.SOURCE_REMOVE
+        dialog = Gtk.MessageDialog(transient_for=self.window, modal=True,
+                                   message_type=Gtk.MessageType.INFO, buttons=Gtk.ButtonsType.CLOSE,
+                                   text="Resultado do teste da ligação")
+        dialog.format_secondary_text(result)
+        dialog.connect("response", lambda window, _response: window.destroy())
+        dialog.show_all()
+        self.status.set_text("Teste terminado · Tablet ligado")
+        return GLib.SOURCE_REMOVE
+
+    def hide_tablet_metrics(self):
+        def worker():
+            try:
+                control_tablet("metrics", visible=False)
+            except RuntimeError:
+                pass  # Disconnection must not be blocked by an unavailable USB device.
+        threading.Thread(target=worker, daemon=True).start()
 
     def stop(self):
         if self.process is None or self.stopping:
             return
         self.stopping = True
+        self.connected = False
+        self.metrics_revision += 1
+        self.cancel_guided_test()
+        self.hide_tablet_metrics()
+        self.diagnostics.set_sensitive(False)
+        self.guided.set_sensitive(False)
         self.button.set_sensitive(False)
         self.status.set_text("A desligar o monitor…")
         self.send_signal(self.process, signal.SIGINT)
@@ -282,10 +425,18 @@ class DisplayApplication(Gtk.Application):
             return GLib.SOURCE_REMOVE
         stopped = self.stopping
         self.process = None
+        self.connected = False
+        self.metrics_revision += 1
         self.stopping = False
         self.rate.set_sensitive(True)
         self.resolution.set_sensitive(True)
-        self.diagnostics.set_sensitive(True)
+        self.diagnostics.set_sensitive(False)
+        self.diagnostics.set_active(False)
+        self.diagnostics.set_label("Mostrar métricas no tablet")
+        self.metrics_applied = False
+        self.cancel_guided_test()
+        self.guided.set_sensitive(False)
+        self.hide_tablet_metrics()
         for button in self.position_buttons:
             button.set_sensitive(True)
         self.button.set_sensitive(True)
