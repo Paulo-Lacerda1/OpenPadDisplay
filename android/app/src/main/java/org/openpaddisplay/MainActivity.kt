@@ -1,0 +1,83 @@
+package org.openpaddisplay
+
+import android.app.Activity
+import android.graphics.Color
+import android.os.Bundle
+import android.view.Gravity
+import android.view.SurfaceHolder
+import android.view.SurfaceView
+import android.view.WindowManager
+import android.widget.FrameLayout
+import android.widget.TextView
+import kotlin.math.min
+
+class MainActivity : Activity(), SurfaceHolder.Callback {
+    private lateinit var canvas: FrameLayout
+    private lateinit var video: SurfaceView
+    private lateinit var status: TextView
+    private var client: StreamClient? = null
+    private var active = false
+    private var generation = 0
+    private var streamWidth = 1920
+    private var streamHeight = 1280
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        canvas = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
+        video = SurfaceView(this).also { it.holder.addCallback(this) }
+        canvas.addView(video, FrameLayout.LayoutParams(-1, -1, Gravity.CENTER))
+        status = TextView(this).apply {
+            text = "OpenPadDisplay · USB test pattern\nWaiting for server…"
+            setTextColor(Color.WHITE)
+            setBackgroundColor(0xBB101820.toInt())
+            setPadding(24, 16, 24, 16)
+            textSize = 14f
+        }
+        canvas.addView(status, FrameLayout.LayoutParams(-1, -2, Gravity.TOP))
+        canvas.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> fitVideo() }
+        setContentView(canvas)
+    }
+
+    private fun fitVideo() {
+        if (canvas.width == 0 || canvas.height == 0) return
+        val scale = min(canvas.width.toFloat() / streamWidth, canvas.height.toFloat() / streamHeight)
+        val width = (streamWidth * scale).toInt().coerceAtLeast(1)
+        val height = (streamHeight * scale).toInt().coerceAtLeast(1)
+        if (video.layoutParams.width != width || video.layoutParams.height != height) {
+            video.layoutParams = FrameLayout.LayoutParams(width, height, Gravity.CENTER)
+        }
+    }
+
+    private fun connect() {
+        if (!active || !video.holder.surface.isValid || client != null) return
+        val id = ++generation
+        client = StreamClient(video.holder.surface, { header ->
+            runOnUiThread {
+                if (id == generation) {
+                    streamWidth = header.width
+                    streamHeight = header.height
+                    fitVideo()
+                }
+            }
+        }, { message ->
+            runOnUiThread {
+                if (id == generation) {
+                    status.text = "$message\nPanel: ${video.display?.refreshRate ?: 0f} Hz"
+                }
+            }
+        }).also { it.start() }
+    }
+
+    private fun disconnect() {
+        generation++
+        client?.stop()
+        client = null
+    }
+
+    override fun onResume() { super.onResume(); active = true; connect() }
+    override fun onPause() { active = false; disconnect(); super.onPause() }
+    override fun surfaceCreated(holder: SurfaceHolder) { connect() }
+    override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) { }
+    override fun surfaceDestroyed(holder: SurfaceHolder) { disconnect() }
+}
