@@ -56,8 +56,9 @@ adb devices
 ./scripts/server.sh
 ```
 
-Open **OpenPadDisplay** on the tablet. A moving ball should appear with diagnostic
-FPS and panel refresh information. The app connects automatically and retries
+Open **OpenPadDisplay** on the tablet. A moving ball should appear in full screen.
+Diagnostics are available with `adb logcat -s OpenPadDisplay:I`. The app connects
+automatically and retries
 if the server or USB connection disappears. Re-run `usb-connect.sh` after
 unplugging the cable. Stop the server with Ctrl+C.
 
@@ -120,8 +121,12 @@ after streaming starts ends that session rather than changing its bitstream.
 
 Host logs show capture buffers, encoded/sent FPS, video bitrate and process CPU
 usage over each reporting interval. Capture buffers include idle keepalive copies.
-Android shows received FPS, rendered callbacks, host encoder, decoder and panel
+Android logs received FPS, rendered callbacks, host encoder, decoder and panel
 refresh rate. Callbacks do not prove distinct scanouts or end-to-end latency.
+
+The `main` branch displays only the video. The `codex/debug` branch also displays
+these diagnostics as an overlay on the tablet. Build and install the APK from the
+branch matching the desired behavior.
 
 Run a repeatable **host-only** benchmark with an animated test source, a 2-second
 warmup, and an 8-second measurement window:

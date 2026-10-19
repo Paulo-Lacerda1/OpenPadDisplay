@@ -88,10 +88,15 @@ Depois inicia o teste sem repetir a instalação por ADB:
 ./scripts/test-usb.sh --skip-install
 ```
 
-O servidor mostra FPS codificados/enviados. A app mostra FPS recebidos,
-callbacks de apresentação e frequência reportada do painel. São indicadores
+O tablet mostra apenas a imagem, em ecrã inteiro. O servidor mostra FPS
+codificados/enviados. Os diagnósticos Android estão disponíveis com
+`adb logcat -s OpenPadDisplay:I`: FPS recebidos, callbacks de apresentação e
+frequência reportada do painel. São indicadores
 distintos; os callbacks não comprovam, por si só, 144 imagens diferentes no painel.
 Ainda não existe medição de latência ponta a ponta.
+
+A branch `main` mostra apenas a imagem. Para ver também as informações no tablet,
+compila e instala o APK da branch `codex/debug`.
 
 Para vários dispositivos usa `./scripts/usb-connect.sh -s SERIAL` e
 `adb -s SERIAL install -r android/app/build/outputs/apk/debug/app-debug.apk`.
@@ -167,7 +172,7 @@ mostra sempre o codificador realmente escolhido. `--encoder nvenc` exige GPU;
 ```
 
 O terminal mostra buffers capturados, FPS codificados/enviados, débito e CPU por
-intervalo. A app mostra FPS recebidos, callbacks de apresentação, codificador do
+intervalo. A app regista no logcat FPS recebidos, callbacks de apresentação, codificador do
 PC e descodificador Android. A frequência pedida continua a ser diferente dos
 frames efetivamente recebidos/apresentados.
 
@@ -188,6 +193,6 @@ Usa `--pattern scroll` para os testes de alta frequência: o padrão da bola pod
 ficar limitado pela geração na CPU. As barras coloridas deslocam-se em todos os
 frames. A app pede também um modo de ecrã correspondente à frequência da fonte;
 as preferências de frequência e de energia do HyperOS podem limitar o painel.
-Se a app receber 144 FPS mas mostrar `Panel: 120 Hz`, verifica a frequência
+Se a app receber 144 FPS mas registar `Panel: 120 Hz` no logcat, verifica a frequência
 selecionada nas definições de ecrã do tablet. Neste equipamento havia um limite
 de 120 Hz, que foi ajustado para 144 Hz durante a validação.
