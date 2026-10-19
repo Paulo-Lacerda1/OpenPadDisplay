@@ -3,6 +3,7 @@ package org.openpaddisplay
 import android.app.Activity
 import android.graphics.Color
 import android.os.Bundle
+import android.util.Log
 import android.view.Gravity
 import android.view.SurfaceHolder
 import android.view.SurfaceView
@@ -11,6 +12,7 @@ import android.view.WindowInsets
 import android.widget.FrameLayout
 import android.widget.TextView
 import kotlin.math.min
+import kotlin.math.abs
 
 class MainActivity : Activity(), SurfaceHolder.Callback {
     private lateinit var canvas: FrameLayout
@@ -68,12 +70,14 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
                     streamWidth = header.width
                     streamHeight = header.height
                     fitVideo()
+                    requestDisplayMode(header.fps)
                 }
             }
         }, { message ->
             runOnUiThread {
                 if (id == generation) {
                     status.text = "$message\nPanel: ${video.display?.refreshRate ?: 0f} Hz"
+                    Log.i("OpenPadDisplay", status.text.toString().replace('\n', ' '))
                 }
             }
         }).also { it.start() }
@@ -83,6 +87,16 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
         generation++
         client?.stop()
         client = null
+    }
+
+    private fun requestDisplayMode(fps: Int) {
+        val display = video.display ?: return
+        val current = display.mode
+        val mode = display.supportedModes.firstOrNull {
+            it.physicalWidth == current.physicalWidth && it.physicalHeight == current.physicalHeight &&
+                abs(it.refreshRate - fps) < 0.5f
+        }
+        window.attributes = window.attributes.apply { preferredDisplayModeId = mode?.modeId ?: 0 }
     }
 
     override fun onResume() { super.onResume(); active = true; connect() }

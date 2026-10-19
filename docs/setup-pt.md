@@ -9,16 +9,16 @@ ativa o ambiente de trabalho estendido, como explicado na secção 4.
 Na raiz do repositório:
 
 ```bash
-sudo apt update
-sudo apt install adb usbutils python3-gi gir1.2-gstreamer-1.0 \
-  gir1.2-gst-plugins-base-1.0 gstreamer1.0-tools \
-  gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-ugly
+./scripts/install-deps.sh
 ./scripts/doctor.sh
 ```
 
 O diagnóstico lê a sessão gráfica, as ferramentas, os elementos GStreamer,
 os dispositivos ADB e a árvore USB. Não altera o GNOME nem cria monitores.
-`nvh264enc` em falta não impede esta fase: usamos `x264enc` na CPU.
+O instalador inclui `gstreamer1.0-plugins-bad`, necessário para `nvh264enc` e
+`h264parse`, e pede a palavra-passe de administrador no terminal. Não substitui
+o driver NVIDIA nem instala o SDK Android. Podes prever os comandos com
+`./scripts/install-deps.sh --dry-run`. Sem NVENC, o modo automático usa `x264enc`.
 O launcher usa `/usr/bin/python3`, que encontra os bindings `gi` do apt.
 
 ## 2. Compilar a aplicação Android
@@ -102,7 +102,7 @@ Se mudares a porta do servidor, mantém a porta Android 27183:
 | `No module named gi` | Usar o launcher com `/usr/bin/python3` |
 | Elemento `x264enc` em falta | Instalar `gstreamer1.0-plugins-ugly` |
 | Modo não suportado pelo descodificador | Reduzir resolução/FPS no servidor |
-| FPS baixos ou aquecimento | Começar por 960×640 a 30 FPS; a codificação usa CPU |
+| FPS baixos ou aquecimento | Verificar `Host: nvenc` na app; reduzir modo ou testar `--encoder nvenc` |
 | Painel fica a 60/120 Hz | Verificar HyperOS/poupança de energia; a app não força a frequência |
 | `Address already in use` | Parar o outro servidor ou usar `--port` e ajustar `adb reverse` |
 
@@ -146,3 +146,40 @@ Num ambiente de trabalho parado, o valor de FPS pode baixar: a captura reage a
 alterações e mantém a ligação viva com repetições periódicas. Para avaliar fluidez,
 move uma janela ou reproduz uma animação no ecrã do tablet. FPS em repouso não
 representa a capacidade máxima do sistema.
+
+## 5. NVENC e testes de desempenho
+
+O modo `--encoder auto` prefere a GPU e recorre à CPU se o arranque do NVENC
+falhar. A alternativa acontece antes de enviar o cabeçalho da sessão: a app
+mostra sempre o codificador realmente escolhido. `--encoder nvenc` exige GPU;
+`--encoder x264` força CPU para comparação.
+
+```bash
+./scripts/extend-usb.sh --encoder nvenc --fps 144 --bitrate 24000
+```
+
+O terminal mostra buffers capturados, FPS codificados/enviados, débito e CPU por
+intervalo. A app mostra FPS recebidos, callbacks de apresentação, codificador do
+PC e descodificador Android. A frequência pedida continua a ser diferente dos
+frames efetivamente recebidos/apresentados.
+
+Para medir apenas a cadeia de geração/codificação no Ubuntu, sem USB nem Android:
+
+```bash
+./scripts/server.sh --encoder nvenc --pattern scroll --fps 144 --bitrate 24000 --benchmark 8
+./scripts/server.sh --encoder x264 --pattern scroll --fps 144 --bitrate 24000 --benchmark 8
+```
+
+Cada teste tem 2 segundos de aquecimento e 8 segundos medidos. Executa-os um de
+cada vez. A linha `BENCHMARK` contém o resumo JSON; CPU de 100% corresponde a um
+núcleo lógico. Não uses estes resultados como medida de latência ou de FPS
+apresentados no tablet. Para medir a captura do ambiente de trabalho é preciso
+movimento contínuo no monitor virtual.
+
+Usa `--pattern scroll` para os testes de alta frequência: o padrão da bola pode
+ficar limitado pela geração na CPU. As barras coloridas deslocam-se em todos os
+frames. A app pede também um modo de ecrã correspondente à frequência da fonte;
+as preferências de frequência e de energia do HyperOS podem limitar o painel.
+Se a app receber 144 FPS mas mostrar `Panel: 120 Hz`, verifica a frequência
+selecionada nas definições de ecrã do tablet. Neste equipamento havia um limite
+de 120 Hz, que foi ajustado para 144 Hz durante a validação.

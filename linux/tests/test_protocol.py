@@ -59,7 +59,7 @@ class GStreamerTests(unittest.TestCase):
             load_gst()
         except RuntimeError as exc:
             self.skipTest(str(exc))
-        args = parse_args(["--width", "320", "--height", "240", "--fps", "30"])
+        args = parse_args(["--width", "320", "--height", "240", "--fps", "30", "--encoder", "x264"])
         sender, receiver = socket.socketpair()
         errors = []
 

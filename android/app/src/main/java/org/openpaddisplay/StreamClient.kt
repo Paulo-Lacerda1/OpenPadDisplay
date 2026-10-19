@@ -5,6 +5,7 @@ import android.media.MediaCodecInfo
 import android.media.MediaCodecList
 import android.media.MediaFormat
 import android.os.Handler
+import android.os.Build
 import android.os.Looper
 import android.view.Surface
 import java.io.DataInputStream
@@ -66,7 +67,12 @@ class StreamClient(
             else -> "Video"
         }
         onHeader(header)
-        surface.setFrameRate(header.fps.toFloat(), Surface.FRAME_RATE_COMPATIBILITY_FIXED_SOURCE)
+        if (Build.VERSION.SDK_INT >= 31) {
+            surface.setFrameRate(header.fps.toFloat(), Surface.FRAME_RATE_COMPATIBILITY_FIXED_SOURCE,
+                Surface.CHANGE_FRAME_RATE_ALWAYS)
+        } else {
+            surface.setFrameRate(header.fps.toFloat(), Surface.FRAME_RATE_COMPATIBILITY_FIXED_SOURCE)
+        }
         val first = StreamProtocol.readFrame(input)
         val (sps, pps) = StreamProtocol.codecData(first.data)
         val info = MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos
@@ -134,7 +140,8 @@ class StreamClient(
                     val count = rendered.get()
                     onStatus("$sourceName · ${header.width}×${header.height} · requested ${header.fps} FPS\n" +
                         "Received %.1f · rendered callbacks %.1f FPS\n%s".format(
-                            (received - lastReceived) / seconds, (count - lastRendered) / seconds, info.name))
+                            (received - lastReceived) / seconds, (count - lastRendered) / seconds,
+                            "Host: ${header.encoder} · decoder: ${info.name}"))
                     lastReport = now
                     lastReceived = received
                     lastRendered = count

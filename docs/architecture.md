@@ -1,12 +1,12 @@
 # Architecture and roadmap
 
-## Implemented: extended desktop prototype (0.2)
+## Implemented: NVENC extended desktop prototype (0.3)
 
 ```text
 Ubuntu / Python + GStreamer
   test-pattern: videotestsrc ────────────────────────────────┐
   virtual: Mutter RecordVirtual → PipeWire → videoconvert ──┤
-    → videorate (drop only) → x264enc (CPU, no B-frames) → appsink
+    → videorate (drop only) → H.264 encoder (no B-frames) → appsink
     → framed TCP on 127.0.0.1:27183
       → adb reverse over USB
         → Kotlin / MediaCodec → SurfaceView
@@ -50,16 +50,39 @@ Opt-in integration tests create and capture real outputs, check the compositor's
 active size/rate, and verify removal after both normal and exceptional exits.
 They preserve existing outputs and are skipped by ordinary CI tests.
 
+## Encoder selection and measurements
+
+`--encoder auto` tries `nvh264enc` plus `h264parse`, then `x264enc` if hardware
+startup fails before a header or frame is sent. Explicit `nvenc` never silently
+uses the CPU. Midstream errors end the session; every reconnect gets fresh
+headers and an IDR. NVENC accepts BGRA input for virtual capture (avoiding CPU
+RGB-to-YUV conversion), while the test generator emits NV12 directly. It uses
+CBR, no B-frames/lookahead, zero reordering
+delay, and a fast low-latency preset supported by the installed plugin. The
+parser repeats SPS/PPS at IDRs. x264 keeps its baseline/zerolatency settings.
+A two-buffer raw queue overlaps generation/capture with encoding. It discards
+old raw frames under load; encoded reference frames are never selectively dropped.
+
+The Ubuntu dependency installer includes the official Bad Plugins package for
+NVENC and parsing. Runtime GPU/driver failure can still trigger startup fallback.
+The host reports separate capture-buffer and encoded/sent counts per interval,
+video bitrate and CPU usage. Raw capture counts include idle repeats and do not
+assert unique desktop content. The optional benchmark uses an animated source
+with warmup and reports host-only throughput; USB and Android are excluded.
+Hardware integration tests verify stream headers and decode using the real GPU;
+fallback tests run on CPU-only CI hosts. An inexpensive scrolling-bars source
+is available for high-FPS benchmarks, since the ball generator can be the limit.
+Android requests a matching native display mode and allows rate changes on
+API 31+, while still reporting the actual panel rate chosen by the OS.
+
 ## Next milestones
 
-1. **Hardware encoding:** probe NVENC and driver compatibility; add an explicit
-   encoder option and software fallback with truthful metrics.
-2. **144 FPS validation:** verify compositor, capture, encoder, USB throughput,
+1. **144 FPS validation:** verify compositor, capture, encoder, USB throughput,
    decoder and presentation independently. Test lower resolutions first, then
    1920×1280, 2560×1708 and 3200×2136. These are targets, not guarantees.
-3. **Input and usability:** touch/stylus return channel, rotation, capability
+2. **Input and usability:** touch/stylus return channel, rotation, capability
    negotiation, start/stop controls and host mode selection.
-4. **Distribution:** investigate non-ADB transports, installation and packaging.
+3. **Distribution:** investigate non-ADB transports, installation and packaging.
 
 No GNOME upgrade is required for the tested Mutter 46 backend. Support on other
 compositors and Mutter versions needs separate testing because this is a private

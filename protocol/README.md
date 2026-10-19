@@ -30,6 +30,12 @@ ignore it and still decode the same H.264 records. New clients default to
 `test-pattern` when the field is omitted and display a generic label for unknown
 sources. No wire version change is required.
 
+An optional `encoder` field identifies the actual host encoder (`nvenc` or
+`x264`). The host publishes metadata only after the chosen encoder has produced
+its first valid access unit. Automatic startup fallback therefore cannot publish
+an incorrect encoder label or send two headers on one connection. A failure
+after streaming begins ends the session instead of switching bitstreams.
+
 ## Repeating video record (host → tablet)
 
 | Field | Size | Value |

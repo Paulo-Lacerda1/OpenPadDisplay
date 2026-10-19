@@ -10,9 +10,11 @@ MAX_METADATA = 4096
 MAX_FRAME = 8 * 1024 * 1024
 
 
-def write_header(stream, width, height, fps, source="test-pattern"):
-    metadata = json.dumps({"codec": "h264", "width": width, "height": height,
-                           "fps": fps, "source": source}).encode("utf-8")
+def write_header(stream, width, height, fps, source="test-pattern", encoder=None):
+    fields = {"codec": "h264", "width": width, "height": height, "fps": fps, "source": source}
+    if encoder is not None:
+        fields["encoder"] = encoder
+    metadata = json.dumps(fields).encode("utf-8")
     if len(metadata) > MAX_METADATA:
         raise ValueError("Metadata too large")
     stream.sendall(MAGIC + LENGTH.pack(len(metadata)) + metadata)

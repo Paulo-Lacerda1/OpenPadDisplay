@@ -7,7 +7,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - run: sudo apt-get update && sudo apt-get install -y python3-gi gir1.2-gstreamer-1.0 gir1.2-gst-plugins-base-1.0 gstreamer1.0-plugins-base gstreamer1.0-plugins-ugly
+      - run: sudo apt-get update && sudo apt-get install -y python3-gi gir1.2-gstreamer-1.0 gir1.2-gst-plugins-base-1.0 gstreamer1.0-plugins-base gstreamer1.0-plugins-ugly gstreamer1.0-plugins-bad
       - run: PYTHONPATH=linux /usr/bin/python3 -m unittest discover -s linux/tests -v
   android:
     runs-on: ubuntu-24.04

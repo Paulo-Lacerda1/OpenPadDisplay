@@ -23,11 +23,12 @@ try:
     from gi.repository import Gst
     Gst.init(None)
     print(Gst.version_string())
-    for name in ("videotestsrc", "videoconvert", "x264enc", "appsink", "pipewiresrc", "nvh264enc"):
+    for name in ("videotestsrc", "videoconvert", "x264enc", "appsink", "pipewiresrc", "nvh264enc", "h264parse"):
         print(f"  {name}: {'available' if Gst.ElementFactory.find(name) else 'MISSING'}")
 except (ImportError, ValueError) as exc:
     print("GStreamer Python bindings MISSING:", exc)
-for command in (["adb", "devices", "-l"], ["lsusb", "-t"], ["gnome-shell", "--version"]):
+for command in (["adb", "devices", "-l"], ["lsusb", "-t"], ["gnome-shell", "--version"],
+                ["nvidia-smi", "--query-gpu=name,driver_version", "--format=csv,noheader"]):
     code, output = probe(command)
     print(f"\n{' '.join(command)} (exit {code}):\n{output}")
 code, output = probe(["gdbus", "introspect", "--session", "--dest", "org.gnome.Mutter.ScreenCast",

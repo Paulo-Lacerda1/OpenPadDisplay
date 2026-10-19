@@ -5,7 +5,7 @@ import java.io.DataInputStream
 
 object StreamProtocol {
     const val MAX_FRAME = 8 * 1024 * 1024
-    data class Header(val width: Int, val height: Int, val fps: Int, val source: String)
+    data class Header(val width: Int, val height: Int, val fps: Int, val source: String, val encoder: String)
     data class Frame(val data: ByteArray, val ptsUs: Long)
 
     fun readHeader(input: DataInputStream): Header {
@@ -16,7 +16,7 @@ object StreamProtocol {
         val json = JSONObject(ByteArray(size).also { input.readFully(it) }.toString(Charsets.UTF_8))
         require(json.getString("codec") == "h264") { "Unsupported codec" }
         return Header(json.getInt("width"), json.getInt("height"), json.getInt("fps"),
-            json.optString("source", "test-pattern")).also {
+            json.optString("source", "test-pattern"), json.optString("encoder", "unknown")).also {
             require(it.width in 2..4096 && it.height in 2..4096 && it.width % 2 == 0 && it.height % 2 == 0)
             require(it.fps in 1..144)
         }
