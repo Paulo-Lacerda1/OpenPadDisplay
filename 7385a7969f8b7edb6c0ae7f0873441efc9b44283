@@ -1,0 +1,39 @@
+{
+  "assets": [
+    {
+      "apiUrl": "https://api.github.com/repos/Paulo-Lacerda1/OpenPadDisplay/releases/assets/657638272",
+      "contentType": "application/vnd.android.package-archive",
+      "createdAt": "2026-10-19T22:42:57Z",
+      "digest": "sha256:7e90683e68d70150b79bf5f8cf1dfa35b607053c0368457f0787196e614ee978",
+      "downloadCount": 0,
+      "id": "RA_kwDOVPZFSc4nMsOA",
+      "label": "",
+      "name": "OpenPadDisplay-1.0.0-debug.apk",
+      "size": 2634072,
+      "state": "uploaded",
+      "updatedAt": "2026-10-19T22:42:57Z",
+      "url": "https://github.com/Paulo-Lacerda1/OpenPadDisplay/releases/download/v1.0.0/OpenPadDisplay-1.0.0-debug.apk"
+    },
+    {
+      "apiUrl": "https://api.github.com/repos/Paulo-Lacerda1/OpenPadDisplay/releases/assets/657638269",
+      "contentType": "application/octet-stream",
+      "createdAt": "2026-10-19T22:42:57Z",
+      "digest": "sha256:aa9aa01a1c3bd1b0d0748bf9525edb885b0fbbe96e13ac840ba978e073468c42",
+      "downloadCount": 0,
+      "id": "RA_kwDOVPZFSc4nMsN9",
+      "label": "",
+      "name": "SHA256SUMS",
+      "size": 97,
+      "state": "uploaded",
+      "updatedAt": "2026-10-19T22:42:57Z",
+      "url": "https://github.com/Paulo-Lacerda1/OpenPadDisplay/releases/download/v1.0.0/SHA256SUMS"
+    }
+  ],
+  "isDraft": false,
+  "isPrerelease": false,
+  "tagName": "v1.0.0",
+  "url": "https://github.com/Paulo-Lacerda1/OpenPadDisplay/releases/tag/v1.0.0",
+  "outcome": "success",
+  "tag": "v1.0.0",
+  "run_url": "https://github.com/Paulo-Lacerda1/OpenPadDisplay/actions/runs/39336859571"
+}
