@@ -96,7 +96,7 @@ distintos; os callbacks não comprovam, por si só, 144 imagens diferentes no pa
 Ainda não existe medição de latência ponta a ponta.
 
 A branch `main` mostra apenas a imagem. Para ver também as informações no tablet,
-compila e instala o APK da branch `codex/debug`.
+compila e instala o APK da branch `debug`.
 
 Para vários dispositivos usa `./scripts/usb-connect.sh -s SERIAL` e
 `adb -s SERIAL install -r android/app/build/outputs/apk/debug/app-debug.apk`.

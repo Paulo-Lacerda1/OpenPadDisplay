@@ -33,7 +33,7 @@ Unsupported modes produce an error asking for a lower mode.
 The server reports encoded/sent FPS. Android logs received access units, frame
 render callback FPS and the panel's reported refresh rate. Render callbacks are
 diagnostic estimates, not proof that every frame was scanned out. The tablet displays
-only the video in immersive full screen on `main`; `codex/debug` adds a diagnostic
+only the video in immersive full screen on `main`; `debug` adds a diagnostic
 overlay. Diagnostics also use the `OpenPadDisplay` logcat tag. There is no
 end-to-end latency measurement or separate raw capture counter yet. The moving
 ball helps reveal stalls but is not a frame-identity benchmark.
