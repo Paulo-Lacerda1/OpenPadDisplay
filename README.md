@@ -56,7 +56,8 @@ adb devices
 ./scripts/server.sh
 ```
 
-Open **OpenPadDisplay** on the tablet. A moving ball should appear in full screen.
+Open **OpenPadDisplay** on the tablet. A moving ball should appear in full screen
+with a diagnostic overlay on this `codex/debug` branch.
 Diagnostics are available with `adb logcat -s OpenPadDisplay:I`. The app connects
 automatically and retries
 if the server or USB connection disappears. Re-run `usb-connect.sh` after

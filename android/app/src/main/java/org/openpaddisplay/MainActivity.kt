@@ -11,12 +11,14 @@ import android.view.WindowManager
 import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.widget.FrameLayout
+import android.widget.TextView
 import kotlin.math.min
 import kotlin.math.abs
 
 class MainActivity : Activity(), SurfaceHolder.Callback {
     private lateinit var canvas: FrameLayout
     private lateinit var video: SurfaceView
+    private lateinit var status: TextView
     private var client: StreamClient? = null
     private var active = false
     private var generation = 0
@@ -36,6 +38,14 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
         }
         video = SurfaceView(this).also { it.holder.addCallback(this) }
         canvas.addView(video, FrameLayout.LayoutParams(-1, -1, Gravity.CENTER))
+        status = TextView(this).apply {
+            text = "OpenPadDisplay · USB display\nWaiting for server…"
+            setTextColor(Color.WHITE)
+            setBackgroundColor(0xBB101820.toInt())
+            setPadding(24, 16, 24, 16)
+            textSize = 14f
+        }
+        canvas.addView(status, FrameLayout.LayoutParams(-1, -2, Gravity.TOP))
         canvas.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> fitVideo() }
         setContentView(canvas)
     }
@@ -78,6 +88,7 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
             runOnUiThread {
                 if (id == generation) {
                     val diagnostics = "$message\nPanel: ${video.display?.refreshRate ?: 0f} Hz"
+                    status.text = diagnostics
                     Log.i("OpenPadDisplay", diagnostics.replace('\n', ' '))
                 }
             }

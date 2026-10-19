@@ -88,7 +88,8 @@ Depois inicia o teste sem repetir a instalação por ADB:
 ./scripts/test-usb.sh --skip-install
 ```
 
-O tablet mostra apenas a imagem, em ecrã inteiro. O servidor mostra FPS
+Nesta branch `codex/debug`, o tablet mostra a imagem em ecrã inteiro com as
+informações de diagnóstico sobrepostas. O servidor mostra FPS
 codificados/enviados. Os diagnósticos Android estão disponíveis com
 `adb logcat -s OpenPadDisplay:I`: FPS recebidos, callbacks de apresentação e
 frequência reportada do painel. São indicadores
