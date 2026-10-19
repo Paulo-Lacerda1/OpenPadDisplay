@@ -45,3 +45,47 @@ The desktop therefore does **not yet sustain 144 distinct presented FPS**. Idle
 desktop traffic falls to roughly one keepalive frame per second, which is expected.
 Future performance work should investigate capture scheduling and copying, then
 validate frame identity and latency across the complete path.
+
+## Pipeline overhead improvements
+
+The `perf/pipeline-and-decoder-overhead` branch moves raw frame rate limiting
+before color conversion. In a controlled 144-to-60 FPS test, 144 source buffers
+previously entered `videoconvert` to produce 60 encoded frames; now only 60 enter
+the converter for the same 60 encoded frames. This removes 58.3% of converter
+invocations in that case. It is not a claim of 58.3% lower total CPU or higher
+desktop FPS; when the source already meets its requested cadence, there may be
+no excess frames to discard.
+
+Host capture counting now polls native `identity.stats` once per report instead
+of calling Python for every raw frame, and disables unused identity handoff
+signals. GStreamer's [identity documentation](https://gstreamer.freedesktop.org/documentation/coreelements/identity.html)
+describes these counters (available since 1.20). Android's frame rendered
+callbacks now run on a dedicated session thread rather than the main UI thread.
+These changes remove work from the capture and UI paths; they do not establish
+an increase in distinct physical scanouts.
+
+Host interval reports also include:
+
+- `rate_dropped`: raw frames discarded by `videorate` during the interval.
+- `raw_queue`: raw buffers waiting when the report is taken, bounded at two.
+- `send_max_ms`: longest complete frame serialization/socket write in the
+  interval. This excludes capture, encoding, decoder and panel time, and can
+  include operating system scheduling delays. It is not end-to-end latency.
+
+Encoded dependent H.264 frames are still never selectively dropped. PipeWire
+`always-copy=true` is retained: avoiding that large raw copy needs a separate
+buffer lifetime and capture benchmark before changing the default.
+
+Validation after these changes:
+
+- All 13 Linux tests passed with both GPU and virtual display integration
+  enabled. The new BGRA-to-I420 rate limiting test rejects the old ordering
+  (144 converter inputs for 60 outputs) and passes the new ordering (60/60).
+- A 16-second USB scrolling-pattern run at 1920×1280, 144 FPS and 24 Mbit/s
+  sustained 144.0 host FPS after startup. Android reported 143.7–144.3 received
+  FPS and rendered callbacks, with a 144 Hz panel. Host intervals reported
+  58.3–63.5% process CPU, no rate drops, zero sampled raw queue occupancy, and
+  0.19–0.28 ms maximum frame write time. These are current-run measurements,
+  not an isolated before/after CPU comparison or proof of distinct scanouts.
+- The Android APK was rebuilt and installed. The original ADB mapping and
+  extended desktop session were restored after the scrolling-pattern test.

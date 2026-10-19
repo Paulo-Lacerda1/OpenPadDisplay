@@ -70,10 +70,11 @@ def pipeline_description(width, height, fps, bitrate, node_id=None, encoder="x26
     else:
         raise ValueError(f"Unknown encoder: {encoder}")
     return (
-        source + "identity name=capture silent=true ! "
-        "queue max-size-buffers=2 max-size-bytes=0 max-size-time=0 leaky=downstream ! "
+        source + "identity name=capture silent=true signal-handoffs=false ! "
+        "queue name=raw_queue max-size-buffers=2 max-size-bytes=0 max-size-time=0 leaky=downstream ! "
+        # Discard excess raw frames before spending CPU on color conversion.
+        f"videorate name=rate drop-only=true skip-to-first=true ! video/x-raw,framerate={fps}/1 ! "
         f"videoconvert ! video/x-raw,format={pixel_format} ! "
-        f"videorate drop-only=true skip-to-first=true ! video/x-raw,framerate={fps}/1 ! "
         + encode +
         "video/x-h264,stream-format=byte-stream,alignment=au,profile=baseline ! "
         "appsink name=video sync=false max-buffers=2 drop=false"
@@ -124,16 +125,14 @@ def _stream_pipeline(Gst, connection, args, monitor, encoder, send_header):
     sink = pipeline.get_by_name("video")
     bus = pipeline.get_bus()
     frames = 0
-    captured = [0]
-
-    def capture_probe(_pad, _info):
-        captured[0] += 1
-        return Gst.PadProbeReturn.OK
-
-    pipeline.get_by_name("capture").get_static_pad("src").add_probe(Gst.PadProbeType.BUFFER, capture_probe)
+    # Poll native counters when reporting instead of taking the GIL on every frame.
+    capture = pipeline.get_by_name("capture")
+    rate = pipeline.get_by_name("rate")
+    raw_queue = pipeline.get_by_name("raw_queue")
     last_report = last_sample = time.monotonic()
     last_cpu = time.process_time()
-    last_frames = last_captured = sent_bytes = 0
+    last_frames = last_captured = last_rate_dropped = sent_bytes = 0
+    max_send_seconds = 0
     try:
         if pipeline.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:
             raise RuntimeError("Could not start GStreamer pipeline")
@@ -162,21 +161,28 @@ def _stream_pipeline(Gst, connection, args, monitor, encoder, send_header):
                 if send_header:
                     write_header(connection, args.width, args.height, args.fps,
                                  source=args.source, encoder=encoder)
+            send_started = time.monotonic()
             write_frame(connection, payload, buffer.pts // 1000)
             frames += 1
             sent_bytes += len(payload)
             now = time.monotonic()
+            max_send_seconds = max(max_send_seconds, now - send_started)
             last_sample = now
             if now - last_report >= 2:
                 elapsed = now - last_report
                 cpu = time.process_time()
-                count = captured[0]
+                count = capture.get_property("stats").get_value("num-buffers")
+                rate_dropped = rate.get_property("drop")
                 print(f"encoder={encoder} capture_buffers={(count - last_captured) / elapsed:.1f} "
                       f"encoded/sent={(frames - last_frames) / elapsed:.1f} FPS "
+                      f"rate_dropped={rate_dropped - last_rate_dropped} "
+                      f"raw_queue={raw_queue.get_property('current-level-buffers')} "
+                      f"send_max_ms={max_send_seconds * 1000:.2f} "
                       f"bitrate={sent_bytes * 8 / elapsed / 1e6:.2f} Mbit/s "
                       f"cpu={(cpu - last_cpu) * 100 / elapsed:.1f}%", flush=True)
                 last_report = now
                 last_cpu, last_frames, last_captured, sent_bytes = cpu, frames, count, 0
+                last_rate_dropped, max_send_seconds = rate_dropped, 0
     except RuntimeError as exc:
         if frames == 0:
             raise EncoderStartupError(str(exc)) from exc
