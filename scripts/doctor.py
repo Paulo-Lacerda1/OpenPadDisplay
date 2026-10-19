@@ -19,6 +19,12 @@ for tool in ("adb", "lsusb", "gst-inspect-1.0", "gdbus", "java"):
     print(f"{tool}: {shutil.which(tool) or 'MISSING'}")
 try:
     import gi
+    gi.require_foreign("cairo")
+    print("Launcher Cairo bindings: available")
+except (ImportError, ValueError) as exc:
+    print("Launcher Cairo bindings MISSING; install python3-gi-cairo:", exc)
+try:
+    import gi
     gi.require_version("Gst", "1.0")
     from gi.repository import Gst
     Gst.init(None)
