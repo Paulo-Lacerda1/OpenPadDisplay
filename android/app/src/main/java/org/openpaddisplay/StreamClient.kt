@@ -5,8 +5,8 @@ import android.media.MediaCodecInfo
 import android.media.MediaCodecList
 import android.media.MediaFormat
 import android.os.Handler
+import android.os.HandlerThread
 import android.os.Build
-import android.os.Looper
 import android.view.Surface
 import java.io.DataInputStream
 import java.net.InetSocketAddress
@@ -97,9 +97,13 @@ class StreamClient(
         val drainError = AtomicReference<Exception?>(null)
         val rendered = AtomicLong(0)
         var drainThread: Thread? = null
+        val renderCallbackThread = HandlerThread("OpenPadDisplay-render-callbacks").also { it.start() }
         try {
             codec.configure(format, surface, null, 0)
-            codec.setOnFrameRenderedListener({ _, _, _ -> rendered.incrementAndGet() }, Handler(Looper.getMainLooper()))
+            codec.setOnFrameRenderedListener(
+                { _, _, _ -> rendered.incrementAndGet() },
+                Handler(renderCallbackThread.looper)
+            )
             codec.start()
             draining.set(true)
             drainThread = Thread({
@@ -156,7 +160,18 @@ class StreamClient(
                 try { drainThread.join() } catch (_: InterruptedException) { interrupted = true }
             }
             try { codec.stop() } catch (_: IllegalStateException) { }
-            codec.release()
+            renderCallbackThread.quitSafely()
+            try {
+                codec.release()
+            } finally {
+                while (renderCallbackThread.isAlive) {
+                    try {
+                        renderCallbackThread.join()
+                    } catch (_: InterruptedException) {
+                        interrupted = true
+                    }
+                }
+            }
             if (interrupted) Thread.currentThread().interrupt()
         }
     }

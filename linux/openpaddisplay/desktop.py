@@ -12,6 +12,22 @@ gi.require_version("Gtk", "3.0")
 from gi.repository import Gio, GLib, Gtk  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
+RESOLUTION_PRESETS = (
+    ("960x640", 960, 640),
+    ("1440x960", 1440, 960),
+    ("1920x1280", 1920, 1280),
+)
+
+
+def stream_command(root, resolution_id, fps):
+    """Build the host command for a selected display mode."""
+    resolutions = {preset_id: (width, height) for preset_id, width, height in RESOLUTION_PRESETS}
+    width, height = resolutions[resolution_id]
+    return [
+        str(root / "scripts/extend-usb.sh"),
+        "--width", str(width), "--height", str(height), "--fps", str(fps),
+        "--encoder", "auto", "--bitrate", "24000" if int(fps) > 60 else "12000",
+    ]
 
 
 class DisplayApplication(Gtk.Application):
@@ -23,6 +39,7 @@ class DisplayApplication(Gtk.Application):
         self.stopping = False
         self.closing = False
         self.logs = deque(maxlen=150)
+        self.resolution = None
 
     def do_activate(self):
         if self.window is not None:
@@ -51,7 +68,15 @@ class DisplayApplication(Gtk.Application):
         self.status.set_max_width_chars(44)
         box.pack_start(self.status, False, False, 0)
         row = Gtk.Box(spacing=12)
-        row.pack_start(Gtk.Label(label="1920 × 1280 · Frequência"), False, False, 0)
+        row.pack_start(Gtk.Label(label="Resolução"), False, False, 0)
+        self.resolution = Gtk.ComboBoxText()
+        for preset_id, width, height in RESOLUTION_PRESETS:
+            self.resolution.append(preset_id, f"{width} × {height}")
+        self.resolution.set_active_id("1920x1280")
+        row.pack_end(self.resolution, False, False, 0)
+        box.pack_start(row, False, False, 0)
+        row = Gtk.Box(spacing=12)
+        row.pack_start(Gtk.Label(label="Frequência"), False, False, 0)
         self.rate = Gtk.ComboBoxText()
         for fps in (60, 120, 144):
             self.rate.append(str(fps), f"{fps} Hz")
@@ -79,10 +104,10 @@ class DisplayApplication(Gtk.Application):
         self.logs.clear()
         self.log_view.get_buffer().set_text("")
         fps = self.rate.get_active_id()
+        resolution_id = self.resolution.get_active_id()
         try:
             self.process = subprocess.Popen(
-                [str(ROOT / "scripts/extend-usb.sh"), "--fps", fps,
-                 "--encoder", "auto", "--bitrate", "24000" if int(fps) > 60 else "12000"],
+                stream_command(ROOT, resolution_id, fps),
                 cwd=ROOT, env={**os.environ, "PYTHONUNBUFFERED": "1"},
                 stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT, text=True, start_new_session=True,
@@ -91,6 +116,7 @@ class DisplayApplication(Gtk.Application):
             self.status.set_text(f"Não foi possível iniciar: {exc}")
             return
         self.rate.set_sensitive(False)
+        self.resolution.set_sensitive(False)
         self.button.set_label("Desligar tablet")
         self.status.set_text("A ligar ao tablet…")
         threading.Thread(target=self.read_output, args=(self.process,), daemon=True).start()
@@ -144,6 +170,7 @@ class DisplayApplication(Gtk.Application):
         self.process = None
         self.stopping = False
         self.rate.set_sensitive(True)
+        self.resolution.set_sensitive(True)
         self.button.set_sensitive(True)
         self.button.set_label("Ligar tablet")
         if stopped or code == 0:
