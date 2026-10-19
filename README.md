@@ -155,9 +155,18 @@ usage over each reporting interval. Capture buffers include idle keepalive copie
 Android logs received FPS, rendered callbacks, host encoder, decoder and panel
 refresh rate. Callbacks do not prove distinct scanouts or end-to-end latency.
 
-The `main` branch displays only the video. The `debug` branch also displays
-these diagnostics as an overlay on the tablet. Build and install the APK from the
-branch matching the desired behavior.
+Earlier APKs on the `debug` branch display a permanent diagnostic overlay. The
+0.4 app uses the optional panel described below.
+
+The **0.4 Android app** adds an optional **Diagnóstico** panel and a 15-second
+guided check. It shows reception, decoder output and rendered callbacks, actual
+panel frequency and encoder/decoder information. Host capture, raw cadence drops,
+queue and send metrics are available when **Enviar métricas ao tablet (APK 0.4+)**
+is enabled in the launcher or the server runs with `--diagnostics`. This is an
+explicit v2 protocol opt-in; default v1 sessions remain compatible with existing
+apps, and the new app accepts both. Missing data and unmeasured USB loss are
+labelled. See [the diagnostic guide](docs/diagnostics.md) for instructions and
+the limits of each measurement.
 
 Run a repeatable **host-only** benchmark with an animated test source, a 2-second
 warmup, and an 8-second measurement window:

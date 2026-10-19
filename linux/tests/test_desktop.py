@@ -20,6 +20,7 @@ class DesktopPositionTests(unittest.TestCase):
                 with patch("openpaddisplay.desktop.subprocess.Popen") as launch, \
                         patch("openpaddisplay.desktop.threading.Thread"):
                     for position, button in zip(("left", "right", "above", "below"), app.position_buttons):
+                        app.diagnostics.set_active(position == "above")
                         button.set_active(True)
                         self.assertEqual(app.position, position)
                         self.assertEqual(app.preview.position, position)
@@ -28,9 +29,12 @@ class DesktopPositionTests(unittest.TestCase):
                         app.on_toggle(None)
                         command = launch.call_args.args[0]
                         self.assertEqual(command[command.index("--position") + 1], position)
+                        self.assertEqual("--diagnostics" in command, position == "above")
+                        self.assertFalse(app.diagnostics.get_sensitive())
                         self.assertTrue(all(not choice.get_sensitive() for choice in app.position_buttons))
                         app.on_finished(app.process, 0)
                         self.assertTrue(all(choice.get_sensitive() for choice in app.position_buttons))
+                        self.assertTrue(app.diagnostics.get_sensitive())
                     launch.side_effect = OSError("test startup error")
                     app.on_toggle(None)
                     self.assertIsNone(app.process)

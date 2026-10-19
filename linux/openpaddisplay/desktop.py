@@ -23,7 +23,7 @@ RESOLUTION_PRESETS = (
 )
 
 
-def stream_command(root, resolution_id, fps, position=None):
+def stream_command(root, resolution_id, fps, position=None, diagnostics=False):
     """Build the host command for a selected display mode."""
     resolutions = {preset_id: (width, height) for preset_id, width, height in RESOLUTION_PRESETS}
     width, height = resolutions[resolution_id]
@@ -34,6 +34,8 @@ def stream_command(root, resolution_id, fps, position=None):
     ]
     if position is not None:
         command.extend(("--position", position))
+    if diagnostics:
+        command.append("--diagnostics")
     return command
 
 
@@ -178,6 +180,9 @@ class DisplayApplication(Gtk.Application):
         hint.set_max_width_chars(44)
         position_box.pack_start(hint, False, False, 0)
         box.pack_start(position_box, False, False, 0)
+        self.diagnostics = Gtk.CheckButton(label="Enviar métricas ao tablet (APK 0.4+)")
+        self.diagnostics.set_tooltip_text("Ativa o protocolo v2. Requer o APK com painel de diagnóstico.")
+        box.pack_start(self.diagnostics, False, False, 0)
         self.button = Gtk.Button(label="Ligar tablet")
         self.button.get_style_context().add_class("suggested-action")
         self.button.connect("clicked", self.on_toggle)
@@ -213,7 +218,7 @@ class DisplayApplication(Gtk.Application):
         resolution_id = self.resolution.get_active_id()
         try:
             self.process = subprocess.Popen(
-                stream_command(ROOT, resolution_id, fps, self.position),
+                stream_command(ROOT, resolution_id, fps, self.position, self.diagnostics.get_active()),
                 cwd=ROOT, env={**os.environ, "PYTHONUNBUFFERED": "1"},
                 stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT, text=True, start_new_session=True,
@@ -223,6 +228,7 @@ class DisplayApplication(Gtk.Application):
             return
         self.rate.set_sensitive(False)
         self.resolution.set_sensitive(False)
+        self.diagnostics.set_sensitive(False)
         for button in self.position_buttons:
             button.set_sensitive(False)
         self.button.set_label("Desligar tablet")
@@ -279,6 +285,7 @@ class DisplayApplication(Gtk.Application):
         self.stopping = False
         self.rate.set_sensitive(True)
         self.resolution.set_sensitive(True)
+        self.diagnostics.set_sensitive(True)
         for button in self.position_buttons:
             button.set_sensitive(True)
         self.button.set_sensitive(True)

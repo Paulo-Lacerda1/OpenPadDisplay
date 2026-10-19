@@ -3,7 +3,7 @@
 import time
 import sys
 
-from .protocol import write_frame, write_header
+from .protocol import write_frame, write_header, write_telemetry
 
 
 class EncoderStartupError(RuntimeError):
@@ -133,6 +133,8 @@ def _stream_pipeline(Gst, connection, args, monitor, encoder, send_header):
     last_cpu = time.process_time()
     last_frames = last_captured = last_rate_dropped = sent_bytes = 0
     max_send_seconds = 0
+    diagnostics = getattr(args, "diagnostics", False)
+    telemetry_sequence = 0
     try:
         if pipeline.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:
             raise RuntimeError("Could not start GStreamer pipeline")
@@ -164,9 +166,9 @@ def _stream_pipeline(Gst, connection, args, monitor, encoder, send_header):
                 print(f"Streaming with {encoder} ({pipeline.get_by_name('encoder').get_factory().get_name()})", flush=True)
                 if send_header:
                     write_header(connection, args.width, args.height, args.fps,
-                                 source=args.source, encoder=encoder)
+                                 source=args.source, encoder=encoder, diagnostics=diagnostics)
             send_started = time.monotonic()
-            write_frame(connection, payload, buffer.pts // 1000)
+            write_frame(connection, payload, buffer.pts // 1000, diagnostics=diagnostics)
             frames += 1
             sent_bytes += len(payload)
             now = time.monotonic()
@@ -177,6 +179,19 @@ def _stream_pipeline(Gst, connection, args, monitor, encoder, send_header):
                 cpu = time.process_time()
                 count = capture.get_property("stats").get_value("num-buffers")
                 rate_dropped = rate.get_property("drop")
+                if diagnostics:
+                    telemetry_sequence += 1
+                    write_telemetry(connection, {
+                        "sequence": telemetry_sequence,
+                        "interval_seconds": elapsed,
+                        "capture_fps": (count - last_captured) / elapsed,
+                        "encoded_fps": (frames - last_frames) / elapsed,
+                        "rate_dropped": rate_dropped - last_rate_dropped,
+                        "raw_queue": raw_queue.get_property("current-level-buffers"),
+                        "send_max_ms": max_send_seconds * 1000,
+                        "bitrate_mbps": sent_bytes * 8 / elapsed / 1e6,
+                        "cpu_percent": (cpu - last_cpu) * 100 / elapsed,
+                    }, buffer.pts // 1000)
                 print(f"encoder={encoder} capture_buffers={(count - last_captured) / elapsed:.1f} "
                       f"encoded/sent={(frames - last_frames) / elapsed:.1f} FPS "
                       f"rate_dropped={rate_dropped - last_rate_dropped} "

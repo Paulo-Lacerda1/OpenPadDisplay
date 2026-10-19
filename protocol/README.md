@@ -1,4 +1,4 @@
-# OpenPadDisplay wire protocol v1
+# OpenPadDisplay wire protocol v1 and opt-in v2
 
 The Linux host listens on **127.0.0.1:27183**. `adb reverse tcp:27183 tcp:27183`
 maps the Android loopback port to the host. The Android app is the TCP client.
@@ -59,3 +59,41 @@ For `virtual`, PipeWire negotiates a variable-rate capture stream using
 `framerate=0/1` and `max-framerate=<requested>/1`. An idle desktop can send far
 fewer frames than requested. The host keeps idle connections alive with periodic
 copies of the last captured frame; these are not distinct captured images.
+
+## Optional v2: live host diagnostics
+
+The host defaults to v1. `--diagnostics` explicitly selects v2 and requires the
+Android 0.4+ app; the new app also accepts v1 hosts. Old clients reject the new
+magic immediately. Telemetry is never inserted into a v1 H.264 stream.
+
+The session header retains the same length and JSON framing, with magic
+**`OPAD0002`**. It reports the actual encoder after the first encoded access unit
+exists. The first record is video containing codec configuration and an IDR.
+
+Subsequent records use the following header:
+
+| Field | Size | Meaning |
+| --- | --- | --- |
+| Type | u8 | 1 = H.264 access unit, 2 = host telemetry JSON |
+| Payload length | u32 | Type 1: 1–8,388,608; type 2: 1–4096 bytes |
+| PTS | u64 | Most recent video presentation timestamp, microseconds |
+| Payload | length bytes | Annex-B H.264 for type 1; UTF-8 JSON for type 2 |
+
+Type 2 is emitted about every two seconds, after a video record. It contains:
+
+```json
+{"sequence":1,"interval_seconds":2.0,"capture_fps":144.0,"encoded_fps":144.0,"rate_dropped":0,"raw_queue":0,"send_max_ms":0.2,"bitrate_mbps":24.0,"cpu_percent":60.0}
+```
+
+`sequence` starts at 1, increases each interval, and resets on reconnect. Rates describe the
+host measurement interval. `rate_dropped` counts raw cadence drops in that
+interval; `raw_queue` is the sampled waiting queue level (0–2). These are not USB
+packet losses. `send_max_ms` only measures video-record writes, including socket
+backpressure. The timestamp has the video timeline's arbitrary origin and is
+not a synchronized tablet clock or end-to-end latency measurement.
+
+The client validates types, lengths and nonnegative finite metrics before use,
+separates telemetry from decoder input, marks telemetry stale after five seconds,
+and bounds consecutive metadata records to avoid starving video. The guided
+test de-duplicates host sequence numbers before averaging host intervals or
+adding cadence drops. Display/render callbacks remain informational.

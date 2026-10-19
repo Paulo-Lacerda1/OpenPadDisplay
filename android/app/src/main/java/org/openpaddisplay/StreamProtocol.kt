@@ -5,29 +5,61 @@ import java.io.DataInputStream
 
 object StreamProtocol {
     const val MAX_FRAME = 8 * 1024 * 1024
-    data class Header(val width: Int, val height: Int, val fps: Int, val source: String, val encoder: String)
+    data class Header(val width: Int, val height: Int, val fps: Int, val source: String, val encoder: String,
+                      val version: Int = 1)
     data class Frame(val data: ByteArray, val ptsUs: Long)
+    data class HostStats(val sequence: Long, val intervalSeconds: Double,
+                         val captureFps: Double, val encodedFps: Double,
+                         val rateDropped: Long, val rawQueue: Int, val sendMaxMs: Double,
+                         val bitrateMbps: Double, val cpuPercent: Double)
 
     fun readHeader(input: DataInputStream): Header {
         val magic = ByteArray(8).also { input.readFully(it) }
-        require(magic.contentEquals("OPAD0001".toByteArray(Charsets.US_ASCII))) { "Unsupported protocol" }
+        val version = when (magic.toString(Charsets.US_ASCII)) {
+            "OPAD0001" -> 1
+            "OPAD0002" -> 2
+            else -> error("Unsupported protocol")
+        }
         val size = input.readInt()
         require(size in 1..4096) { "Invalid metadata size" }
         val json = JSONObject(ByteArray(size).also { input.readFully(it) }.toString(Charsets.UTF_8))
         require(json.getString("codec") == "h264") { "Unsupported codec" }
         return Header(json.getInt("width"), json.getInt("height"), json.getInt("fps"),
-            json.optString("source", "test-pattern"), json.optString("encoder", "unknown")).also {
+            json.optString("source", "test-pattern"), json.optString("encoder", "unknown"), version).also {
             require(it.width in 2..4096 && it.height in 2..4096 && it.width % 2 == 0 && it.height % 2 == 0)
             require(it.fps in 1..144)
         }
     }
 
-    fun readFrame(input: DataInputStream): Frame {
-        val size = input.readInt()
-        require(size in 1..MAX_FRAME) { "Invalid access unit size" }
-        val pts = input.readLong()
-        require(pts >= 0) { "Invalid presentation timestamp" }
-        return Frame(ByteArray(size).also { input.readFully(it) }, pts)
+    fun readFrame(input: DataInputStream, version: Int = 1, onHostStats: (HostStats) -> Unit = {}): Frame {
+        require(version in 1..2) { "Unsupported protocol" }
+        // Bound consecutive metadata records so a broken peer cannot starve video.
+        repeat(16) {
+            val type = if (version == 2) input.readUnsignedByte() else 1
+            val size = input.readInt()
+            require(type == 1 || type == 2) { "Unsupported record type" }
+            require(size in 1..if (type == 1) MAX_FRAME else 4096) { "Invalid record size" }
+            val pts = input.readLong()
+            require(pts >= 0) { "Invalid presentation timestamp" }
+            val payload = ByteArray(size).also { input.readFully(it) }
+            if (type == 1) return Frame(payload, pts)
+            onHostStats(readHostStats(payload))
+        }
+        error("Too many metadata records without video")
+    }
+
+    private fun readHostStats(payload: ByteArray): HostStats {
+        val json = JSONObject(payload.toString(Charsets.UTF_8))
+        fun number(key: String): Double = json.getDouble(key).also {
+            require(it.isFinite() && it >= 0) { "Invalid host metric: $key" }
+        }
+        return HostStats(json.getLong("sequence"), number("interval_seconds"),
+            number("capture_fps"), number("encoded_fps"), json.getLong("rate_dropped"),
+            json.getInt("raw_queue"), number("send_max_ms"), number("bitrate_mbps"), number("cpu_percent")).also {
+            require(it.sequence > 0 && it.intervalSeconds > 0 && it.rateDropped >= 0 && it.rawQueue in 0..2) {
+                "Invalid host telemetry"
+            }
+        }
     }
 
     // Extract Annex-B SPS/PPS, accepting both three- and four-byte start codes.

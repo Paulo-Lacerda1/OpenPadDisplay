@@ -30,6 +30,8 @@ def parse_args(argv=None):
                         help="Test pattern: moving ball or inexpensive scrolling color bars")
     parser.add_argument("--position", choices=("left", "right", "above", "below"),
                         help="Place the virtual tablet on this outside edge of the existing desktop")
+    parser.add_argument("--diagnostics", action="store_true",
+                        help="Send v2 live host metrics; requires Android app 0.4 or newer")
     parser.add_argument("--port", type=positive, default=27183)
     parser.add_argument("--width", type=positive, default=1920)
     parser.add_argument("--height", type=positive, default=1280)
@@ -41,6 +43,8 @@ def parse_args(argv=None):
     args = parser.parse_args(argv)
     if args.position is not None and args.source != "virtual":
         parser.error("--position requires --source virtual")
+    if args.diagnostics and args.benchmark:
+        parser.error("--diagnostics is for tablet sessions, not host-only --benchmark")
     if args.port > 65535 or args.fps > 144:
         parser.error("Port must be <= 65535 and FPS <= 144")
     if args.width % 2 or args.height % 2 or max(args.width, args.height) > 4096:
