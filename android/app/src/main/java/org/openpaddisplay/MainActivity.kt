@@ -7,6 +7,7 @@ import android.view.Gravity
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.view.WindowManager
+import android.view.WindowInsets
 import android.widget.FrameLayout
 import android.widget.TextView
 import kotlin.math.min
@@ -23,12 +24,19 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        window.setDecorFitsSystemWindows(false)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         canvas = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
+        canvas.setOnApplyWindowInsetsListener { view, insets ->
+            val bars = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
+            view.setPadding(bars.left, bars.top, bars.right, bars.bottom)
+            fitVideo()
+            insets
+        }
         video = SurfaceView(this).also { it.holder.addCallback(this) }
         canvas.addView(video, FrameLayout.LayoutParams(-1, -1, Gravity.CENTER))
         status = TextView(this).apply {
-            text = "OpenPadDisplay · USB test pattern\nWaiting for server…"
+            text = "OpenPadDisplay · USB display\nWaiting for server…"
             setTextColor(Color.WHITE)
             setBackgroundColor(0xBB101820.toInt())
             setPadding(24, 16, 24, 16)
@@ -41,7 +49,9 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
 
     private fun fitVideo() {
         if (canvas.width == 0 || canvas.height == 0) return
-        val scale = min(canvas.width.toFloat() / streamWidth, canvas.height.toFloat() / streamHeight)
+        val availableWidth = canvas.width - canvas.paddingLeft - canvas.paddingRight
+        val availableHeight = canvas.height - canvas.paddingTop - canvas.paddingBottom
+        val scale = min(availableWidth.toFloat() / streamWidth, availableHeight.toFloat() / streamHeight)
         val width = (streamWidth * scale).toInt().coerceAtLeast(1)
         val height = (streamHeight * scale).toInt().coerceAtLeast(1)
         if (video.layoutParams.width != width || video.layoutParams.height != height) {

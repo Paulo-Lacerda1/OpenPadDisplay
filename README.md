@@ -3,10 +3,11 @@
 An open-source project to use Android tablets as extended displays for Linux over
 USB, targeting up to 144 Hz. MIT licensed.
 
-**Current status: phase 1 video transport prototype.** A Linux server sends a
-moving H.264 test pattern to a native Android app through ADB reverse. It does
-not create a second desktop monitor or capture the desktop yet. NVENC and
-144 FPS end-to-end operation are future milestones, not validated features.
+**Current status: extended desktop prototype for GNOME Wayland.** The Linux
+server can create a real virtual monitor with Mutter, capture it through
+PipeWire, and send H.264 video to Android through ADB reverse. A moving test
+pattern remains available for diagnostics. Encoding currently uses the CPU.
+NVENC and 144 distinct presented frames per second are not yet validated.
 
 ## Quick start — Ubuntu + Android
 
@@ -64,11 +65,40 @@ CPU encoding and tablet capabilities may limit these modes. Android chooses the
 actual panel rate in response to the app's request. Panel refresh, source request
 and distinct presented frames are separate measurements.
 
+## Extended desktop
+
+After installing the APK and authorizing USB debugging, run from a GNOME Wayland
+desktop terminal:
+
+```bash
+./scripts/extend-usb.sh
+```
+
+This opens the installed app, maps the USB connection and starts a **1920×1280,
+requested 60 Hz** virtual display. GNOME adds an output such as `Meta-0`; use
+Settings → Displays to inspect its position. In the tested configuration it is
+placed to the right of the laptop, so drag a window across the right edge to
+see it on the tablet. Stop the host with Ctrl+C. The virtual output is removed
+when the client disconnects or the server stops; GNOME moves its windows back
+to the remaining displays. Reconnecting creates a new output.
+
+For a lighter mode:
+
+```bash
+./scripts/extend-usb.sh --width 960 --height 640 --fps 60 --bitrate 4000
+```
+
+Mutter 46 was verified locally to negotiate 960×640 at 60 Hz and at 144 Hz via
+PipeWire's `max-framerate`. A GNOME upgrade is not required for this backend.
+An idle desktop produces fewer frames; a keepalive prevents decoder/network
+timeouts. FPS while idle is not a performance benchmark. Touch/stylus control
+is a future extension; use the PC's keyboard and mouse.
+
 ## Development
 
 ```text
 android/    Kotlin + MediaCodec + SurfaceView client
-linux/      Python + GStreamer test-pattern server and tests
+linux/      Python, Mutter/PipeWire capture, GStreamer encoder and tests
 protocol/   Versioned TCP framing specification
 docs/       Setup, architecture and roadmap
 scripts/    Diagnostics, USB mapping and server launcher
@@ -77,6 +107,13 @@ scripts/    Diagnostics, USB mapping and server launcher
 ```bash
 PYTHONPATH=linux /usr/bin/python3 -m unittest discover -s linux/tests -v
 ./scripts/server.sh --dry-run
+```
+
+Opt-in desktop integration tests briefly create real monitors and check capture,
+refresh negotiation and cleanup, including failure recovery:
+
+```bash
+OPENPADDISPLAY_TEST_VIRTUAL=1 PYTHONPATH=linux /usr/bin/python3 -m unittest discover -s linux/tests -v
 ```
 
 Protocol tests use Python's standard library. The encoding integration test needs

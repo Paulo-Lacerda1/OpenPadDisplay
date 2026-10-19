@@ -1,8 +1,8 @@
 # Primeiro teste no Ubuntu e no tablet
 
-Esta fase transmite um padrão de vídeo animado. Ainda não permite arrastar
-janelas para o tablet. Primeiro validamos USB, codificação e descodificação;
-o monitor virtual será a fase seguinte.
+O projeto permite testar um padrão de vídeo ou criar um segundo monitor real
+no GNOME Wayland. Começa pelo padrão para confirmar USB e descodificação; depois
+ativa o ambiente de trabalho estendido, como explicado na secção 4.
 
 ## 1. Dependências no Ubuntu
 
@@ -69,10 +69,11 @@ Se o Xiaomi bloquear `adb install` com `INSTALL_FAILED_USER_RESTRICTED`, copia o
 APK para o tablet e instala-o pelo gestor de ficheiros:
 
 ```bash
-adb -d push android/app/build/outputs/apk/debug/app-debug.apk /sdcard/Download/OpenPadDisplay-0.1.0-debug.apk
+adb -d push android/app/build/outputs/apk/debug/app-debug.apk /sdcard/Download/000-OpenPadDisplay.apk
 ```
 
-No tablet, abre Transferências → `OpenPadDisplay-0.1.0-debug.apk` → Instalar.
+No tablet, abre Armazenamento interno → Download → `000-OpenPadDisplay.apk` → Instalar.
+O prefixo `000-` coloca o APK no início da lista quando está ordenada por nome.
 Depois inicia o teste sem repetir a instalação por ADB:
 
 ```bash
@@ -108,3 +109,40 @@ Se mudares a porta do servidor, mantém a porta Android 27183:
 Uma ligação `5000M` em `lsusb -t` é desejável para os testes de maior débito,
 mas não garante FPS. Um cabo USB 2 pode servir para o primeiro teste comprimido.
 Nenhuma atualização do Ubuntu/GNOME é necessária nesta fase.
+
+## 4. Usar como segundo monitor
+
+Com o tablet autorizado e a aplicação instalada:
+
+```bash
+./scripts/extend-usb.sh
+```
+
+O atalho abre a app, refaz o túnel ADB e inicia um monitor virtual de 1920×1280
+a uma frequência pedida de 60 Hz. Também podes configurar o modo:
+
+```bash
+./scripts/extend-usb.sh --width 960 --height 640 --fps 60 --bitrate 4000
+```
+
+No teste local, o GNOME colocou o ecrã adicional à direita do portátil. Arrasta
+uma janela para fora da margem direita para a veres no tablet. Usa o rato e
+o teclado do computador; o retorno de toque/caneta ainda não está implementado.
+Consulta Definições → Ecrãs no Ubuntu para ver a disposição e o monitor `Meta-0`
+(o nome pode variar). Não alteres a resolução nas definições do GNOME durante
+a sessão: para mudar de modo, pára o servidor e ajusta os argumentos do comando.
+
+Mantém a app em primeiro plano. Se a fechares ou desligares o cabo, o servidor
+remove o monitor virtual e o GNOME traz as janelas de volta para os ecrãs restantes.
+Ctrl+C no terminal também remove o monitor. Depois de voltar a ligar o cabo,
+executa novamente o atalho para refazer o túnel USB.
+
+O GNOME 46 foi verificado a negociar monitores virtuais de 960×640 a 60 Hz e
+a 144 Hz através do PipeWire. Isto corrige a hipótese inicial de que seria
+obrigatório atualizar o ambiente gráfico. Os 144 frames distintos apresentados
+por segundo continuam a exigir testes de desempenho da cadeia completa.
+
+Num ambiente de trabalho parado, o valor de FPS pode baixar: a captura reage a
+alterações e mantém a ligação viva com repetições periódicas. Para avaliar fluidez,
+move uma janela ou reproduz uma animação no ecrã do tablet. FPS em repouso não
+representa a capacidade máxima do sistema.

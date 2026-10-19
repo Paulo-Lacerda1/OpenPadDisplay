@@ -1,15 +1,23 @@
-"""Live test-pattern source. The virtual desktop backend is a future milestone."""
+"""H.264 streaming from a live test pattern or a Mutter virtual output."""
 
 import time
 
 from .protocol import write_frame
 
 
-def pipeline_description(width, height, fps, bitrate):
+def pipeline_description(width, height, fps, bitrate, node_id=None):
+    if node_id is None:
+        source = ("videotestsrc is-live=true pattern=ball ! "
+                  f"video/x-raw,width={width},height={height},framerate={fps}/1 ! ")
+    else:
+        source = (
+            f"pipewiresrc path={int(node_id)} do-timestamp=true always-copy=true keepalive-time=1000 ! "
+            f"video/x-raw,width={width},height={height},framerate=0/1,max-framerate={fps}/1 ! "
+        )
     return (
-        "videotestsrc is-live=true pattern=ball ! "
-        f"video/x-raw,width={width},height={height},framerate={fps}/1 ! "
+        source +
         "videoconvert ! video/x-raw,format=I420 ! "
+        f"videorate drop-only=true skip-to-first=true ! video/x-raw,framerate={fps}/1 ! "
         f"x264enc tune=zerolatency speed-preset=ultrafast bitrate={bitrate} "
         f"key-int-max={fps} bframes=0 byte-stream=true "
         "option-string=repeat-headers=1 ! "
@@ -18,7 +26,7 @@ def pipeline_description(width, height, fps, bitrate):
     )
 
 
-def load_gst():
+def load_gst(virtual=False):
     try:
         import gi
         gi.require_version("Gst", "1.0")
@@ -26,15 +34,23 @@ def load_gst():
     except (ImportError, ValueError) as exc:
         raise RuntimeError("Install python3-gi and gir1.2-gstreamer-1.0; use /usr/bin/python3") from exc
     Gst.init(None)
-    for name in ("videotestsrc", "videoconvert", "x264enc", "appsink"):
+    elements = ("videoconvert", "videorate", "x264enc", "appsink", "pipewiresrc" if virtual else "videotestsrc")
+    for name in elements:
         if Gst.ElementFactory.find(name) is None:
             raise RuntimeError(f"Missing GStreamer element: {name}. Run scripts/doctor.sh")
     return Gst
 
 
-def stream_video(connection, args):
-    Gst = load_gst()
-    pipeline = Gst.parse_launch(pipeline_description(args.width, args.height, args.fps, args.bitrate))
+def stream_video(connection, args, monitor=None):
+    Gst = load_gst(virtual=monitor is not None)
+    from gi.repository import GLib
+    try:
+        pipeline = Gst.parse_launch(pipeline_description(
+            args.width, args.height, args.fps, args.bitrate,
+            node_id=monitor.node_id if monitor else None,
+        ))
+    except GLib.Error as exc:
+        raise RuntimeError(f"Could not construct the video pipeline: {exc.message}") from exc
     sink = pipeline.get_by_name("video")
     bus = pipeline.get_bus()
     frames = 0
@@ -44,6 +60,8 @@ def stream_video(connection, args):
         if pipeline.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:
             raise RuntimeError("Could not start GStreamer pipeline")
         while True:
+            if monitor and monitor.closed.is_set():
+                raise RuntimeError("GNOME closed the virtual monitor session")
             sample = sink.emit("try-pull-sample", Gst.SECOND)
             if sample is None:
                 message = bus.timed_pop_filtered(0, Gst.MessageType.ERROR | Gst.MessageType.EOS)

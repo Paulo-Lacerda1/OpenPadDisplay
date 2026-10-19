@@ -24,6 +24,12 @@ Dimensions must be even and in 2–4096; FPS in 1–144. FPS describes the reque
 source cadence, not a measured result or capability negotiation. Unknown JSON
 fields may be ignored. Other codecs/versions must be rejected.
 
+`source` is `test-pattern` or `virtual`. It describes whether pixels come from
+the diagnostic source or from a real Mutter virtual monitor. Older clients can
+ignore it and still decode the same H.264 records. New clients default to
+`test-pattern` when the field is omitted and display a generic label for unknown
+sources. No wire version change is required.
+
 ## Repeating video record (host → tablet)
 
 | Field | Size | Value |
@@ -42,3 +48,8 @@ Every connection starts a new encoder and header so a reconnect has no dependenc
 on old frames. Backpressure is bounded by appsink and socket send timeouts.
 Encoded dependent frames are not selectively dropped. Capability negotiation,
 input events and telemetry sent to the host are future extensions.
+
+For `virtual`, PipeWire negotiates a variable-rate capture stream using
+`framerate=0/1` and `max-framerate=<requested>/1`. An idle desktop can send far
+fewer frames than requested. The host keeps idle connections alive with periodic
+copies of the last captured frame; these are not distinct captured images.

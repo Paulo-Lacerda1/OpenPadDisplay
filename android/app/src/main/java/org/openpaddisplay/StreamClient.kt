@@ -60,6 +60,11 @@ class StreamClient(
     private fun receive(connection: Socket) {
         val input = DataInputStream(connection.getInputStream().buffered(64 * 1024))
         val header = StreamProtocol.readHeader(input)
+        val sourceName = when (header.source) {
+            "virtual" -> "Extended desktop"
+            "test-pattern" -> "Test pattern"
+            else -> "Video"
+        }
         onHeader(header)
         surface.setFrameRate(header.fps.toFloat(), Surface.FRAME_RATE_COMPATIBILITY_FIXED_SOURCE)
         val first = StreamProtocol.readFrame(input)
@@ -127,7 +132,7 @@ class StreamClient(
                 if (now - lastReport >= 1_000_000_000L) {
                     val seconds = (now - lastReport) / 1e9
                     val count = rendered.get()
-                    onStatus("Test pattern · ${header.width}×${header.height} · requested ${header.fps} FPS\n" +
+                    onStatus("$sourceName · ${header.width}×${header.height} · requested ${header.fps} FPS\n" +
                         "Received %.1f · rendered callbacks %.1f FPS\n%s".format(
                             (received - lastReceived) / seconds, (count - lastRendered) / seconds, info.name))
                     lastReport = now
