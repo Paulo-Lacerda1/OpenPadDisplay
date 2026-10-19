@@ -88,7 +88,7 @@ Depois inicia o teste sem repetir a instalação por ADB:
 ./scripts/test-usb.sh --skip-install
 ```
 
-Nesta branch `codex/debug`, o tablet mostra a imagem em ecrã inteiro com as
+Nesta branch `debug`, o tablet mostra a imagem em ecrã inteiro com as
 informações de diagnóstico sobrepostas. O servidor mostra FPS
 codificados/enviados. Os diagnósticos Android estão disponíveis com
 `adb logcat -s OpenPadDisplay:I`: FPS recebidos, callbacks de apresentação e
@@ -97,7 +97,7 @@ distintos; os callbacks não comprovam, por si só, 144 imagens diferentes no pa
 Ainda não existe medição de latência ponta a ponta.
 
 A branch `main` mostra apenas a imagem. Para ver também as informações no tablet,
-compila e instala o APK da branch `codex/debug`.
+compila e instala o APK da branch `debug`.
 
 Para vários dispositivos usa `./scripts/usb-connect.sh -s SERIAL` e
 `adb -s SERIAL install -r android/app/build/outputs/apk/debug/app-debug.apk`.
