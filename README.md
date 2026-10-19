@@ -155,10 +155,13 @@ usage over each reporting interval. Capture buffers include idle keepalive copie
 Android logs received FPS, rendered callbacks, host encoder, decoder and panel
 refresh rate. Callbacks do not prove distinct scanouts or end-to-end latency.
 
-The **0.4.1 Android app** shows only video until you press **Mostrar métricas no
+The **0.4.2 Android app** shows only video until you press **Mostrar métricas no
 tablet** in the computer application. The same button hides the metrics immediately,
 without restarting the video; no buttons or test controls appear on the tablet.
-The **Testar ligação (15 s)** button and its results also stay on the computer.
+Click **Testar ligação (10 s)** to show scrolling TV color bars on the tablet for
+10 seconds. The test uses the current resolution/rate, then restores the extended
+desktop and shows its result on the computer. No manual window movement is needed.
+The automatic test requires APK 0.4.2+.
 
 The launcher sends host telemetry using protocol v2, even while the overlay is
 hidden. The CLI keeps protocol v1 by default; add `--diagnostics` for host telemetry.

@@ -6,7 +6,7 @@ hipótese baseada nas amostras disponíveis, não uma medição de latência tot
 
 ## Abrir o painel
 
-O APK **0.4.1** mostra apenas o vídeo por defeito. Na aplicação **do computador**,
+O APK **0.4.2** mostra apenas o vídeo por defeito. Na aplicação **do computador**,
 liga o tablet e clica em **Mostrar métricas no tablet**. Aparecem só as métricas
 sobre o vídeo, sem botões, caixas de confirmação nem controlos de teste no tablet.
 Clica em **Ocultar métricas do tablet** para deixar a imagem completamente limpa.
@@ -49,34 +49,41 @@ agrupadas. Em Android anterior ao 14, alguns frames renderizados podem nem
 gerar callback. Não é possível provar a quantidade de imagens físicas distintas
 ou a latência ponta a ponta só com estes contadores.
 
-## Teste guiado: começar por uma fonte animada
+## Testar a ligação: barras RGB em movimento durante 10 segundos
 
-1. Liga o tablet por USB na aplicação do computador.
-2. Clica em **Testar ligação (15 s)** no computador e lê a indicação para manter
-   uma janela em movimento. A confirmação e o cancelamento ficam no computador.
-3. Mantém movimento no monitor do tablet. Os primeiros 3 segundos estabilizam a
-   ligação; as amostras seguintes alimentam o resultado.
-4. O resultado abre numa janela **no computador**. O tablet continua a mostrar
-   apenas o vídeo e, se tiveres ativado o botão, as métricas.
-5. Repete no modo que queres usar e muda apenas uma variável de cada vez:
-   resolução, frequência, bitrate ou encoder.
+1. Liga o tablet por USB na aplicação do computador, escolhendo a resolução e a
+   frequência que queres avaliar. O teste automático requer APK **0.4.2+**.
+2. Clica em **Testar ligação (10 s)**. O tablet passa a mostrar barras de cor de
+   televisão a deslocarem-se lateralmente, com o mesmo modo e encoder da sessão.
+   Não precisas de mover janelas nem de confirmar movimento.
+3. A transmissão do padrão dura **10 segundos**, contados desde o primeiro frame
+   enviado; a preparação e a reconexão podem acrescentar alguns segundos à operação.
+   O Android ignora os primeiros 2 segundos na análise, para estabilizar o decoder.
+4. No fim, o monitor estendido é reposto com a configuração anterior, incluindo a
+   posição e a opção de métricas. O resultado aparece **no computador**. O tablet
+   continua sem botões e fica limpo se as métricas estavam desativadas.
+5. Podes cancelar o teste. Uma falha ou interrupção não produz uma conclusão de
+   teste completo; o launcher tenta repor a sessão anterior. Desligar/fechar a
+   aplicação termina a operação, sem voltar a ligar o monitor por iniciativa própria.
 
-Para comparar com uma fonte animada independente do desktop, encerra primeiro a
-sessão do launcher e executa um servidor de teste, observando os logs:
+Durante o padrão, o monitor virtual é removido e depois recriado. O teste mede
+codificação, transmissão, descodificação e callbacks com uma fonte animada
+independente da captura do desktop. **Não mede a captura PipeWire do monitor
+estendido**, nem latência total ou a quantidade de imagens físicas distintas.
+Os contadores e o resultado do teste não se misturam com os da sessão reposta.
+
+Para executar só o padrão temporário na linha de comandos (encerra primeiro a
+sessão do launcher):
 
 ```bash
-./scripts/test-usb.sh --skip-install --diagnostics --encoder auto --pattern scroll --width 960 --height 640 --fps 60 --bitrate 4000
+./scripts/test-usb.sh --skip-install --diagnostics --duration 10 --encoder auto --pattern scroll --width 960 --height 640 --fps 60 --bitrate 4000
 ```
 
-Termina com Ctrl+C antes de iniciar outra sessão. Os controlos do launcher são
-ativados nas ligações iniciadas pelo próprio launcher.
-
-O teste `scroll` separa a geração contínua da dependência das alterações do
-desktop. No monitor estendido, move uma janela continuamente durante a recolha.
-Uma imagem parada envia poucos frames por desenho e não demonstra um gargalo.
-O teste pode ser cancelado e é interrompido ao perder/reiniciar a ligação ou
-passar a aplicação para segundo plano. Uma recolha incompleta não produz um
-diagnóstico de gargalo. As métricas e contadores recomeçam em cada sessão.
+O servidor de teste espera o cliente até 15 segundos, transmite uma única sessão
+com limite de duração e termina. `TEST_RESULT` regista o resumo do host; o
+resultado no computador também verifica a confirmação e as amostras do Android.
+Uma imagem parada no desktop pode enviar poucos frames intencionalmente; o
+padrão `scroll` evita essa ambiguidade durante este teste.
 
 ## Como investigar cada etapa
 

@@ -22,7 +22,7 @@ class StreamProtocolTest {
 
     @Test fun legacyAndV2VideoKeepAccessUnitAndTimestamp() {
         for (version in 1..2) {
-            val frame = StreamProtocol.readFrame(input(version), version)
+            val frame = StreamProtocol.readFrame(input(version), version)!!
             assertEquals(1234L, frame.ptsUs)
             assertArrayEquals(byteArrayOf(0, 0, 0, 1, 0x65), frame.data)
         }
@@ -69,7 +69,7 @@ class StreamProtocolTest {
         val bytes = input(2, type = 2, size = telemetry.toByteArray().size, payload = telemetry.toByteArray()).readBytes() +
             input(2).readBytes()
         var host: StreamProtocol.HostStats? = null
-        val frame = StreamProtocol.readFrame(DataInputStream(ByteArrayInputStream(bytes)), 2) { host = it }
+        val frame = StreamProtocol.readFrame(DataInputStream(ByteArrayInputStream(bytes)), 2, onHostStats = { host = it })!!
         assertArrayEquals(byteArrayOf(0, 0, 0, 1, 0x65), frame.data)
         assertEquals(144.0, host!!.captureFps, .01)
         assertEquals(1L, host!!.sequence)
@@ -81,6 +81,108 @@ class StreamProtocolTest {
             telemetry.replace("\"raw_queue\":0", "\"raw_queue\":3"))) {
             val stream = input(2, type = 2, size = payload.toByteArray().size, payload = payload.toByteArray())
             assertThrows(IllegalArgumentException::class.java) { StreamProtocol.readFrame(stream, 2) }
+        }
+    }
+
+    private val testComplete = """{"event":"test_complete","test_id":"abc123","duration_seconds":10,"elapsed_seconds":10.5}"""
+
+    private fun timedHeader(version: Int, fields: String, source: String = "test-pattern"): StreamProtocol.Header {
+        val metadata = """{"codec":"h264","width":320,"height":240,"fps":60,"source":"$source",$fields}""".toByteArray()
+        val bytes = ByteArrayOutputStream()
+        DataOutputStream(bytes).use {
+            it.write("OPAD000$version".toByteArray())
+            it.writeInt(metadata.size)
+            it.write(metadata)
+        }
+        return StreamProtocol.readHeader(DataInputStream(ByteArrayInputStream(bytes.toByteArray())))
+    }
+
+    @Test fun timedHeaderRequiresV2PatternAndPairedIdentifierDuration() {
+        val fields = """"test_id":"abc123","test_duration_seconds":10"""
+        val header = timedHeader(2, fields)
+        assertEquals("abc123", header.testId)
+        assertEquals(10, header.testDurationSeconds)
+        for ((version, invalid, source) in listOf(
+            Triple(1, fields, "test-pattern"), Triple(2, fields, "virtual"),
+            Triple(2, """"test_id":"abc123"""", "test-pattern"),
+            Triple(2, """"test_duration_seconds":10""", "test-pattern"),
+            Triple(2, fields.replace("abc123", ""), "test-pattern"),
+            Triple(2, fields.replace(":10", ":0"), "test-pattern"))) {
+            assertThrows(IllegalArgumentException::class.java) { timedHeader(version, invalid, source) }
+        }
+    }
+
+    @Test fun prematureCompletionCannotClaimFullDuration() {
+        val payload = testComplete.replace("10.5", "9.9").toByteArray()
+        assertThrows(IllegalArgumentException::class.java) {
+            StreamProtocol.readFrame(input(2, type = 3, size = payload.size, payload = payload), 2)
+        }
+    }
+
+    @Test fun testCompleteRecordIsTerminalAndNeverReturnedAsVideo() {
+        var result: StreamProtocol.TestComplete? = null
+        val bytes = input(2, type = 3, size = testComplete.toByteArray().size, payload = testComplete.toByteArray()).readBytes() +
+            input(2).readBytes()
+        val frame = StreamProtocol.readFrame(DataInputStream(ByteArrayInputStream(bytes)), 2,
+            onTestComplete = { result = it })
+        assertNull(frame)
+        assertEquals("abc123", result!!.testId)
+        assertEquals(10, result.durationSeconds)
+        assertEquals(10.5, result.elapsedSeconds, 0.001)
+    }
+
+    @Test fun testCompleteRecordIsPassedToCallbackWithoutVideoAfter() {
+        var result: StreamProtocol.TestComplete? = null
+        val bytes = input(2, type = 3, size = testComplete.toByteArray().size, payload = testComplete.toByteArray()).readBytes()
+        // Sem vídeo após o record3: readFrame processa o record3 e chama o callback.
+        val frame = StreamProtocol.readFrame(DataInputStream(ByteArrayInputStream(bytes)), 2,
+            onTestComplete = { result = it })
+        assertNull(frame)
+        assertEquals("abc123", result!!.testId)
+        assertEquals(10, result.durationSeconds)
+        assertEquals(10.5, result.elapsedSeconds, 0.001)
+    }
+
+    @Test fun testCompleteRecordWithInvalidEventIsRejected() {
+        val bad = testComplete.replace("\"test_complete\"", "\"other_event\"")
+        val stream = input(2, type = 3, size = bad.toByteArray().size, payload = bad.toByteArray())
+        assertThrows(IllegalArgumentException::class.java) {
+            StreamProtocol.readFrame(stream, 2, onTestComplete = { })
+        }
+    }
+
+    @Test fun testCompleteRecordWithEmptyTestIdIsRejected() {
+        val bad = testComplete.replace("\"abc123\"", "\"\"")
+        val stream = input(2, type = 3, size = bad.toByteArray().size, payload = bad.toByteArray())
+        assertThrows(IllegalArgumentException::class.java) {
+            StreamProtocol.readFrame(stream, 2, onTestComplete = { })
+        }
+    }
+
+    @Test fun testCompleteRecordWithInvalidDurationIsRejected() {
+        val bad = testComplete.replace("\"duration_seconds\":10", "\"duration_seconds\":0")
+        val stream = input(2, type = 3, size = bad.toByteArray().size, payload = bad.toByteArray())
+        assertThrows(IllegalArgumentException::class.java) {
+            StreamProtocol.readFrame(stream, 2, onTestComplete = { })
+        }
+    }
+
+    @Test fun testCompleteRecordWithNaNElapsedIsRejected() {
+        val bad = testComplete.replace("\"elapsed_seconds\":10.5", "\"elapsed_seconds\":NaN")
+        val stream = input(2, type = 3, size = bad.toByteArray().size, payload = bad.toByteArray())
+        assertThrows(IllegalArgumentException::class.java) {
+            StreamProtocol.readFrame(stream, 2, onTestComplete = { })
+        }
+    }
+
+    @Test fun recordType4IsRejected() {
+        val baos = java.io.ByteArrayOutputStream()
+        baos.write(4)
+        baos.write(ByteArray(4) { 0 })
+        baos.write(ByteArray(8) { 0.toByte() })
+        baos.write(0)
+        assertThrows(IllegalArgumentException::class.java) {
+            StreamProtocol.readFrame(DataInputStream(java.io.ByteArrayInputStream(baos.toByteArray())), 2)
         }
     }
 

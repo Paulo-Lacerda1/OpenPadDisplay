@@ -74,10 +74,10 @@ Subsequent records use the following header:
 
 | Field | Size | Meaning |
 | --- | --- | --- |
-| Type | u8 | 1 = H.264 access unit, 2 = host telemetry JSON |
-| Payload length | u32 | Type 1: 1–8,388,608; type 2: 1–4096 bytes |
+| Type | u8 | 1 = H.264 access unit, 2 = host telemetry JSON, 3 = timed-test completion JSON |
+| Payload length | u32 | Type 1: 1–8,388,608; types 2/3: 1–4096 bytes |
 | PTS | u64 | Most recent video presentation timestamp, microseconds |
-| Payload | length bytes | Annex-B H.264 for type 1; UTF-8 JSON for type 2 |
+| Payload | length bytes | Annex-B H.264 for type 1; UTF-8 JSON for types 2/3 |
 
 Type 2 is emitted about every two seconds, after a video record. It contains:
 
@@ -97,3 +97,34 @@ separates telemetry from decoder input, marks telemetry stale after five seconds
 and bounds consecutive metadata records to avoid starving video. The guided
 test de-duplicates host sequence numbers before averaging host intervals or
 adding cadence drops. Display/render callbacks remain informational.
+
+
+## Timed RGB test (v2, Android 0.4.2+)
+
+`--source test-pattern --pattern scroll --duration 10 --diagnostics` runs one
+connection and exits after ten seconds from the first video record sent. The
+launcher enables telemetry in all its sessions; the CLI still defaults to v1.
+Timed sessions add `test_id` (a unique identifier per connection) and
+`test_duration_seconds` (integer 1–3600) to the header. These fields must appear
+together, with a v2 test-pattern source.
+
+The Android client begins collecting automatically on this header, discarding
+the initial two seconds of warmup. Normal EOF/reconnection without completion
+cancels the collection; it must not present an interrupted test as completed.
+
+After the final video record, the host sends type **3** with its most recent PTS:
+
+```json
+{"event":"test_complete","test_id":"unique-session-id","duration_seconds":10,"elapsed_seconds":10.002}
+```
+
+The identifier and duration must match the header and elapsed time must be finite
+and at least the requested duration. This record finalizes the Android diagnosis
+before the socket closes. Its result remains available through the ADB control
+status while the launcher restores the normal virtual session. The host also
+prints `TEST_RESULT` JSON with the same ID, duration, actual elapsed time, frame
+count, encoder and mode; this is a host summary, not a measurement of distinct
+physical frames. The launcher matches both results before showing a diagnosis.
+
+The type-3 extension is only sent for timed diagnostic tests, which require APK
+0.4.2+. Continuous v1/v2 streaming and older compatible clients are unchanged.

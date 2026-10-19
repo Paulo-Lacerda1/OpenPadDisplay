@@ -20,7 +20,8 @@ class StreamClient(
     private val surface: Surface,
     private val onHeader: (StreamProtocol.Header) -> Unit,
     private val onStatus: (String) -> Unit,
-    private val onDiagnostics: (Sample?) -> Unit = {}
+    private val onDiagnostics: (Sample?) -> Unit = {},
+    private val onTestComplete: (StreamProtocol.TestComplete) -> Unit = {}
 ) {
     data class Sample(
         val header: StreamProtocol.Header,
@@ -43,6 +44,7 @@ class StreamClient(
 
     private val running = AtomicBoolean(false)
     @Volatile private var socket: Socket? = null
+    @Volatile private var fastReconnectUntilNs = 0L
     private var worker: Thread? = null
 
     fun start() {
@@ -70,7 +72,8 @@ class StreamClient(
                     socket = null
                 }
                 if (running.get()) {
-                    try { Thread.sleep(2000) } catch (_: InterruptedException) { break }
+                    val delay = if (System.nanoTime() < fastReconnectUntilNs) 100L else 2000L
+                    try { Thread.sleep(delay) } catch (_: InterruptedException) { break }
                 }
             }
         }, "OpenPadDisplay-receiver").also { it.start() }
@@ -85,6 +88,8 @@ class StreamClient(
     private fun receive(connection: Socket) {
         val input = DataInputStream(connection.getInputStream().buffered(64 * 1024))
         val header = StreamProtocol.readHeader(input)
+        if (header.testId.isEmpty()) fastReconnectUntilNs = 0L
+        var testCompleteReceived = false
         val latestHost = AtomicReference<StreamProtocol.HostStats?>(null)
         val hostSeenNs = AtomicLong(0)
         val received = AtomicLong(0)
@@ -92,14 +97,29 @@ class StreamClient(
         val decoded = AtomicLong(0)
         val rendered = AtomicLong(0)
         val inputWaitNs = AtomicLong(0)
-        fun readFrame(): StreamProtocol.Frame {
-            val frame = StreamProtocol.readFrame(input, header.version) {
-                val previous = latestHost.get()
-                require(previous == null || it.sequence > previous.sequence) { "Host telemetry sequence did not increase" }
-                latestHost.set(it)
-                hostSeenNs.set(System.nanoTime())
-            }
-            received.incrementAndGet()
+        fun readFrame(): StreamProtocol.Frame? {
+            val frame = StreamProtocol.readFrame(input, header.version,
+                onTestComplete = {
+                    require(header.testId.isNotEmpty()) { "Test record without test_id in header" }
+                    require(it.testId == header.testId) { "Test record test_id does not match header" }
+                    require(it.durationSeconds == header.testDurationSeconds) {
+                        "Test record duration does not match header"
+                    }
+                    require(received.get() > 0) { "Test record received before any video frame" }
+                    require(!testCompleteReceived) { "Duplicate test record" }
+                    testCompleteReceived = true
+                    // Reopen the restored monitor promptly after this deliberate source switch.
+                    fastReconnectUntilNs = System.nanoTime() + 3_000_000_000L
+                    onTestComplete(it)
+                },
+                onHostStats = {
+                    val previous = latestHost.get()
+                    require(previous == null || it.sequence > previous.sequence) { "Host telemetry sequence did not increase" }
+                    latestHost.set(it)
+                    hostSeenNs.set(System.nanoTime())
+                }
+            )
+            if (frame != null) received.incrementAndGet()
             return frame
         }
         onHeader(header)
@@ -109,7 +129,7 @@ class StreamClient(
         } else {
             surface.setFrameRate(header.fps.toFloat(), Surface.FRAME_RATE_COMPATIBILITY_FIXED_SOURCE)
         }
-        val first = readFrame()
+        val first = readFrame() ?: error("No video frame received")
         val (sps, pps) = StreamProtocol.codecData(first.data)
         val info = MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos
             .filter { !it.isEncoder && it.supportedTypes.any { type -> type.equals("video/avc", true) } }
@@ -208,7 +228,8 @@ class StreamClient(
                 buffer.put(frame.data)
                 codec.queueInputBuffer(index, 0, frame.data.size, frame.ptsUs, 0)
                 queued.incrementAndGet()
-                frame = readFrame()
+                val next = readFrame()
+                if (next != null) frame = next
             }
         } finally {
             draining.set(false)

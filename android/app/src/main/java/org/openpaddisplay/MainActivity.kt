@@ -45,6 +45,8 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
     private var testStartedNs: Long? = null
     private var testMotionConfirmed = false
     private var testId = ""
+    private var testDurationSeconds = 0
+    private var automaticTest = false
     private var testState = "idle"
     private var testResult = ""
     private val controlReceiver = object : BroadcastReceiver() {
@@ -70,7 +72,19 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
         override fun run() {
             val started = testStartedNs ?: return
             val elapsed = (System.nanoTime() - started) / 1e9
+            if (automaticTest) {
+                // Teste automático: timer só cancela, nunca conclui sem record3 do host.
+                if (elapsed >= testDurationSeconds + 5) {
+                    cancelTest("Teste automático expirado sem confirmação do computador.")
+                } else {
+                    handler.postDelayed(this, 1000)
+                }
+                return
+            }
+            // Teste manual: timer de 15 s conclui com o que foi recolhido.
             if (elapsed >= 15) {
+                handler.removeCallbacks(this)
+                testStartedNs = null
                 finishTest()
                 return
             }
@@ -180,6 +194,18 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
                     streamWidth = header.width; streamHeight = header.height
                     fitVideo(); requestDisplayMode(header.fps)
                     stateText.text = "Ligado · a aguardar métricas"
+                    // Teste automático do launcher: header v2 com test_id inicia recolha sem botões.
+                    if (header.testId.isNotEmpty()) {
+                        testId = header.testId
+                        testDurationSeconds = header.testDurationSeconds
+                        automaticTest = true
+                        testMotionConfirmed = true
+                        testState = "running"
+                        testResult = ""
+                        testStartedNs = System.nanoTime()
+                        readings.clear()
+                        handler.post(testTicker)
+                    }
                 }
             }
         }, { message ->
@@ -196,9 +222,23 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
                     latest = sample
                     if (sample == null) cancelTest("Teste interrompido: a ligação foi reiniciada.")
                     val started = testStartedNs
-                    if (sample != null && started != null && (sample.sampledAtNs - started) / 1e9 >= 3) {
+                    val warmupSeconds = if (automaticTest) 2 else 3
+                    if (sample != null && started != null && (sample.sampledAtNs - started) / 1e9 >= warmupSeconds) {
                         readings.add(Reading(sample, video.display?.refreshRate?.toDouble()))
                     }
+                    updatePanel()
+                }
+            }
+        }, { testComplete ->
+            runOnUiThread {
+                if (id == generation && automaticTest && testStartedNs != null && testComplete.testId == testId) {
+                    // Conclui só no record3 do host (não timer), ordenado antes onDiagnostics(null).
+                    testStartedNs = null
+                    handler.removeCallbacks(testTicker)
+                    automaticTest = false
+                    finishTest()
+                    testResult += " (${String.format("%.1f", testComplete.elapsedSeconds)}s / ${testComplete.durationSeconds}s)"
+                    Log.i("OpenPadDisplay", "Test complete: ${testComplete.testId} elapsed=${testComplete.elapsedSeconds}s duration=${testComplete.durationSeconds}s")
                     updatePanel()
                 }
             }
@@ -249,6 +289,7 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
         }
         readings.clear()
         testMotionConfirmed = motionConfirmed
+        automaticTest = false
         testState = "running"
         testResult = ""
         testStartedNs = System.nanoTime()
@@ -259,12 +300,15 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
         if (testStartedNs == null) return
         handler.removeCallbacks(testTicker)
         testStartedNs = null
+        automaticTest = false
         readings.clear()
         testState = "cancelled"
         testResult = message
     }
 
     private fun finishTest() {
+        handler.removeCallbacks(testTicker)
+        automaticTest = false
         val samples = readings.toList()
         testStartedNs = null
         val last = samples.lastOrNull()?.sample ?: latest
