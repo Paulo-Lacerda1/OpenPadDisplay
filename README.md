@@ -29,7 +29,7 @@ Preview package commands with `./scripts/install-deps.sh --dry-run`.
 The dependency installer also adds **OpenPadDisplay** to your Ubuntu application
 menu when run as your desktop user. If dependencies are already installed, run
 `./scripts/install-desktop.py` without sudo. Open the app, connect the tablet by
-USB, choose a refresh rate and click **Ligar tablet**. **Desligar tablet**, or
+USB, choose a resolution and refresh rate and click **Ligar tablet**. **Desligar tablet**, or
 closing the window, stops its stream and removes its virtual monitor. The launcher
 uses the installed Android app; install the APK first as described below. Keep
 this checkout at its current location, or rerun the launcher installer after moving it.
@@ -95,6 +95,13 @@ placed to the right of the laptop, so drag a window across the right edge to
 see it on the tablet. Stop the host with Ctrl+C. The virtual output is removed
 when the client disconnects or the server stops; GNOME moves its windows back
 to the remaining displays. Reconnecting creates a new output.
+
+The desktop launcher offers three resolution presets: **960×640**, **1440×960**
+and **1920×1280** (default), each with 60, 120 or 144 Hz. Lower resolutions
+reduce capture and encoding workload, while the highest resolution provides
+more image detail. The configured bitrate remains unchanged. Higher refresh
+rates also increase workload; the available
+rate still depends on the tablet, compositor and complete streaming path.
 
 For a lighter mode:
 
