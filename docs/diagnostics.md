@@ -6,7 +6,7 @@ hipótese baseada nas amostras disponíveis, não uma medição de latência tot
 
 ## Abrir o painel
 
-O APK **1.0.0** mostra apenas o vídeo por defeito. Na aplicação **do computador**,
+O APK **1.0.1** mostra apenas o vídeo por defeito. Na aplicação **do computador**,
 liga o tablet e clica em **Mostrar métricas no tablet**. Aparecem só as métricas
 sobre o vídeo, sem botões, caixas de confirmação nem controlos de teste no tablet.
 Clica em **Ocultar métricas do tablet** para deixar a imagem completamente limpa.

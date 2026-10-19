@@ -3,8 +3,8 @@
 An open-source project to use Android tablets as extended displays for Linux over
 USB, targeting up to 144 Hz. MIT licensed.
 
-Download the tablet APK from [OpenPadDisplay v1.0.0](https://github.com/Paulo-Lacerda1/OpenPadDisplay/releases/tag/v1.0.0).
-Install `OpenPadDisplay-1.0.0-debug.apk` on Android 11 or newer, then follow
+Download the tablet APK from [OpenPadDisplay v1.0.1](https://github.com/Paulo-Lacerda1/OpenPadDisplay/releases/tag/v1.0.1).
+Install `OpenPadDisplay-1.0.1-debug.apk` on Android 11 or newer, then follow
 the [Linux setup guide](docs/setup-pt.md). The APK uses a development signature.
 
 **Current status: extended desktop prototype for GNOME Wayland.** The Linux
@@ -159,7 +159,7 @@ usage over each reporting interval. Capture buffers include idle keepalive copie
 Android logs received FPS, rendered callbacks, host encoder, decoder and panel
 refresh rate. Callbacks do not prove distinct scanouts or end-to-end latency.
 
-The **1.0.0 Android app** shows only video until you press **Mostrar métricas no
+The **1.0.1 Android app** shows only video until you press **Mostrar métricas no
 tablet** in the computer application. The same button hides the metrics immediately,
 without restarting the video; no buttons or test controls appear on the tablet.
 Click **Testar ligação (10 s)** to show scrolling TV color bars on the tablet for

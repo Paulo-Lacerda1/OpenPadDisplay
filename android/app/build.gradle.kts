@@ -15,8 +15,8 @@ android {
         applicationId = "org.openpaddisplay"
         minSdk = 30
         targetSdk = 35
-        versionCode = 8
-        versionName = "1.0.0"
+        versionCode = 9
+        versionName = "1.0.1"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
