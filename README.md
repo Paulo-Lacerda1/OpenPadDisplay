@@ -201,7 +201,7 @@ OPENPADDISPLAY_TEST_VIRTUAL=1 PYTHONPATH=linux /usr/bin/python3 -m unittest disc
 
 The virtual display tests also check all four tablet positions and restoration
 of the existing layout. To test launcher controls and saved preferences without
-starting a stream, with GTK 3 and Xvfb installed:
+starting a stream, with GTK 3, `python3-gi-cairo` and Xvfb installed:
 
 ```bash
 OPENPADDISPLAY_TEST_DESKTOP=1 PYTHONPATH=linux xvfb-run -a /usr/bin/python3 -m unittest discover -s linux/tests -p test_desktop.py -v
