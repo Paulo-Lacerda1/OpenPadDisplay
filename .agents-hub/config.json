@@ -1,0 +1,12 @@
+{
+  "selected_agents": [
+    "codex",
+    "copilot",
+    "opencode"
+  ],
+  "full_access": {
+    "codex": true,
+    "copilot": true,
+    "opencode": true
+  }
+}

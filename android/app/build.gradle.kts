@@ -3,6 +3,11 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+dependencies {
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
+}
+
 android {
     namespace = "org.openpaddisplay"
     compileSdk = 35
@@ -10,8 +15,8 @@ android {
         applicationId = "org.openpaddisplay"
         minSdk = 30
         targetSdk = 35
-        versionCode = 3
-        versionName = "0.3.0"
+        versionCode = 6
+        versionName = "0.4.2"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
