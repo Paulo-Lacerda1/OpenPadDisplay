@@ -21,6 +21,14 @@ o driver NVIDIA nem instala o SDK Android. Podes prever os comandos com
 `./scripts/install-deps.sh --dry-run`. Sem NVENC, o modo automático usa `x264enc`.
 O launcher usa `/usr/bin/python3`, que encontra os bindings `gi` do apt.
 
+O instalador também coloca **OpenPadDisplay** no menu de aplicações do Ubuntu,
+com o mesmo logótipo da app Android. Se já tens as dependências instaladas, executa
+`./scripts/install-desktop.py` sem `sudo`. Procura OpenPadDisplay no menu, liga o
+tablet por USB e carrega em **Ligar tablet**. Podes escolher 60, 120 ou 144 Hz;
+a frequência pedida não garante esse número de frames apresentados. Para terminar,
+usa **Desligar tablet** ou fecha a janela. Se mudares a pasta do projeto, volta
+a executar o instalador do atalho. É necessário ter a app instalada no tablet.
+
 ## 2. Compilar a aplicação Android
 
 Abre `android/` no Android Studio e deixa sincronizar o Gradle. Usa JDK 17

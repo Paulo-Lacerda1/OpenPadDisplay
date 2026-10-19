@@ -26,6 +26,17 @@ The installer includes `gstreamer1.0-plugins-bad`, which provides `nvh264enc`
 and `h264parse`. A working NVIDIA driver is required for hardware encoding.
 Preview package commands with `./scripts/install-deps.sh --dry-run`.
 
+The dependency installer also adds **OpenPadDisplay** to your Ubuntu application
+menu when run as your desktop user. If dependencies are already installed, run
+`./scripts/install-desktop.py` without sudo. Open the app, connect the tablet by
+USB, choose a refresh rate and click **Ligar tablet**. **Desligar tablet**, or
+closing the window, stops its stream and removes its virtual monitor. The launcher
+uses the installed Android app; install the APK first as described below. Keep
+this checkout at its current location, or rerun the launcher installer after moving it.
+
+The same [shared icon](assets/branding/openpaddisplay.png) is used on Linux and
+Android. Artwork provenance and regeneration are in [branding](assets/branding/README.md).
+
 Build `android/` using Android Studio, or use JDK 17, Android SDK Platform 35 and
 the included Gradle 8.9 wrapper:
 

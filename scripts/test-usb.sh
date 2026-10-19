@@ -11,7 +11,7 @@ if ! command -v adb >/dev/null; then
     echo 'ADB missing. Install with: sudo apt install adb' >&2
     exit 1
 fi
-if [ ! -f "$APK" ]; then
+if [ "$SKIP_INSTALL" = false ] && [ ! -f "$APK" ]; then
     echo "Build the APK first: cd '$ROOT/android' && ./gradlew assembleDebug" >&2
     exit 1
 fi
