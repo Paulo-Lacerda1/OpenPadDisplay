@@ -22,5 +22,5 @@ jobs:
           # Override the default package list, which includes the obsolete 'tools' package.
           packages: 'platform-tools platforms;android-35 build-tools;34.0.0'
       - uses: gradle/actions/setup-gradle@v4
-      - run: ./gradlew assembleDebug lintDebug
+      - run: ./gradlew assembleDebug testDebugUnitTest lintDebug
         working-directory: android

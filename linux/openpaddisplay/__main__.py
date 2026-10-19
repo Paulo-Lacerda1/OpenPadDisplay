@@ -30,6 +30,8 @@ def parse_args(argv=None):
                         help="Test pattern: moving ball or inexpensive scrolling color bars")
     parser.add_argument("--position", choices=("left", "right", "above", "below"),
                         help="Place the virtual tablet on this outside edge of the existing desktop")
+    parser.add_argument("--diagnostics", action="store_true",
+                        help="Send v2 live host metrics; requires Android app 0.4 or newer")
     parser.add_argument("--port", type=positive, default=27183)
     parser.add_argument("--width", type=positive, default=1920)
     parser.add_argument("--height", type=positive, default=1280)
@@ -38,9 +40,15 @@ def parse_args(argv=None):
     parser.add_argument("--dry-run", action="store_true", help="Print the pipeline without opening a socket")
     parser.add_argument("--benchmark", type=positive, metavar="SECONDS",
                         help="Measure host encoding for this many seconds after a 2-second warmup; no USB")
+    parser.add_argument("--duration", type=positive, metavar="SECONDS",
+                        help="Run one test-pattern connection for this many seconds of video, then exit")
     args = parser.parse_args(argv)
     if args.position is not None and args.source != "virtual":
         parser.error("--position requires --source virtual")
+    if args.diagnostics and args.benchmark:
+        parser.error("--diagnostics is for tablet sessions, not host-only --benchmark")
+    if args.duration is not None and (args.duration > 3600 or args.source != "test-pattern" or args.benchmark):
+        parser.error("--duration requires a test pattern, at most 3600 seconds, and no --benchmark")
     if args.port > 65535 or args.fps > 144:
         parser.error("Port must be <= 65535 and FPS <= 144")
     if args.width % 2 or args.height % 2 or max(args.width, args.height) > 4096:
@@ -72,6 +80,8 @@ def main(argv=None):
             listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             listener.bind(("127.0.0.1", args.port))
             listener.listen(1)
+            if args.duration:
+                listener.settimeout(15)
             print(f"OpenPadDisplay listening on 127.0.0.1:{args.port}; source={args.source}", flush=True)
             print(f"Run: adb reverse tcp:27183 tcp:{args.port} — then open the Android app", flush=True)
             while True:
@@ -81,9 +91,16 @@ def main(argv=None):
                     connection.settimeout(3)
                     try:
                         with source_context(args.source, args.position) as monitor:
-                            stream_video(connection, args, monitor, send_header=True)
+                            result = stream_video(connection, args, monitor, send_header=True)
+                            if args.duration and result is None:
+                                raise RuntimeError("Test stream ended before the requested duration")
+                        if args.duration:
+                            return 0
                     except (OSError, RuntimeError, ValueError) as exc:
-                        print(f"Session ended: {exc}; waiting for reconnection", file=sys.stderr, flush=True)
+                        outcome = "test failed" if args.duration else "waiting for reconnection"
+                        print(f"Session ended: {exc}; {outcome}", file=sys.stderr, flush=True)
+                        if args.duration:
+                            return 1
     except KeyboardInterrupt:
         return 0
     except (OSError, RuntimeError) as exc:

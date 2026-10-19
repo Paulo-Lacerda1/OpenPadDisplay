@@ -43,13 +43,13 @@ jobs:
           apk="dist/$RELEASE_TAG/OpenPadDisplay-$version-debug.apk"
           sums="dist/$RELEASE_TAG/SHA256SUMS"
           if gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft > /tmp/release-draft; then
-            test "$(cat /tmp/release-draft)" = true
             gh release upload "$RELEASE_TAG" "$apk" "$sums" --clobber
           else
             gh release create "$RELEASE_TAG" "$apk" "$sums" --verify-tag --draft \
               --title "OpenPadDisplay $RELEASE_TAG" --notes-file "docs/releases/$RELEASE_TAG.md"
           fi
-          gh release edit "$RELEASE_TAG" --draft=false --prerelease=false --latest
+          gh release edit "$RELEASE_TAG" --draft=false --prerelease=false --latest \
+            --title "OpenPadDisplay $RELEASE_TAG" --notes-file "docs/releases/$RELEASE_TAG.md"
           gh release view "$RELEASE_TAG" --json url,tagName,isDraft,isPrerelease,assets > /tmp/release-receipt.json
       # An SSH-only maintainer can inspect this receipt without an API token.
       - name: Record publication result in Git notes

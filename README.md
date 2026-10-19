@@ -159,9 +159,21 @@ usage over each reporting interval. Capture buffers include idle keepalive copie
 Android logs received FPS, rendered callbacks, host encoder, decoder and panel
 refresh rate. Callbacks do not prove distinct scanouts or end-to-end latency.
 
-The `main` branch displays only the video. The `debug` branch also displays
-these diagnostics as an overlay on the tablet. Build and install the APK from the
-branch matching the desired behavior.
+The **1.0.0 Android app** shows only video until you press **Mostrar métricas no
+tablet** in the computer application. The same button hides the metrics immediately,
+without restarting the video; no buttons or test controls appear on the tablet.
+Click **Testar ligação (10 s)** to show scrolling TV color bars on the tablet for
+10 seconds. The test uses the current resolution/rate, then restores the extended
+desktop and shows its result on the computer. No manual window movement is needed.
+The automatic test requires APK 0.4.2+.
+
+The launcher sends host telemetry using protocol v2, even while the overlay is
+hidden. The CLI keeps protocol v1 by default; add `--diagnostics` for host telemetry.
+The new APK accepts both protocols. Reception, decoder output, rendered callbacks,
+panel frequency and encoder/decoder information are shown separately. Missing data
+and unmeasured USB loss are labelled. Live controls use the existing authorized ADB
+USB connection and require APK 0.4.1+. See [the diagnostic guide](docs/diagnostics.md)
+for instructions and measurement limits.
 
 Run a repeatable **host-only** benchmark with an animated test source, a 2-second
 warmup, and an 8-second measurement window:

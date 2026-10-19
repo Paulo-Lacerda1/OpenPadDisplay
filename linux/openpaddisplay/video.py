@@ -1,9 +1,11 @@
 """H.264 streaming from a live test pattern or a Mutter virtual output."""
 
-import time
+import json
 import sys
+import time
+import uuid
 
-from .protocol import write_frame, write_header
+from .protocol import write_frame, write_header, write_telemetry, write_test_complete
 
 
 class EncoderStartupError(RuntimeError):
@@ -133,6 +135,12 @@ def _stream_pipeline(Gst, connection, args, monitor, encoder, send_header):
     last_cpu = time.process_time()
     last_frames = last_captured = last_rate_dropped = sent_bytes = 0
     max_send_seconds = 0
+    diagnostics = getattr(args, "diagnostics", False)
+    duration = getattr(args, "duration", None)
+    test_id = uuid.uuid4().hex if duration else None
+    started_at = None
+    total_bytes = 0
+    telemetry_sequence = 0
     try:
         if pipeline.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:
             raise RuntimeError("Could not start GStreamer pipeline")
@@ -164,12 +172,17 @@ def _stream_pipeline(Gst, connection, args, monitor, encoder, send_header):
                 print(f"Streaming with {encoder} ({pipeline.get_by_name('encoder').get_factory().get_name()})", flush=True)
                 if send_header:
                     write_header(connection, args.width, args.height, args.fps,
-                                 source=args.source, encoder=encoder)
+                                 source=args.source, encoder=encoder, diagnostics=diagnostics,
+                                 test_id=test_id if diagnostics else None,
+                                 test_duration_seconds=duration if diagnostics else None)
             send_started = time.monotonic()
-            write_frame(connection, payload, buffer.pts // 1000)
+            write_frame(connection, payload, buffer.pts // 1000, diagnostics=diagnostics)
             frames += 1
             sent_bytes += len(payload)
+            total_bytes += len(payload)
             now = time.monotonic()
+            if started_at is None:
+                started_at = now
             max_send_seconds = max(max_send_seconds, now - send_started)
             last_sample = now
             if now - last_report >= 2:
@@ -177,6 +190,19 @@ def _stream_pipeline(Gst, connection, args, monitor, encoder, send_header):
                 cpu = time.process_time()
                 count = capture.get_property("stats").get_value("num-buffers")
                 rate_dropped = rate.get_property("drop")
+                if diagnostics:
+                    telemetry_sequence += 1
+                    write_telemetry(connection, {
+                        "sequence": telemetry_sequence,
+                        "interval_seconds": elapsed,
+                        "capture_fps": (count - last_captured) / elapsed,
+                        "encoded_fps": (frames - last_frames) / elapsed,
+                        "rate_dropped": rate_dropped - last_rate_dropped,
+                        "raw_queue": raw_queue.get_property("current-level-buffers"),
+                        "send_max_ms": max_send_seconds * 1000,
+                        "bitrate_mbps": sent_bytes * 8 / elapsed / 1e6,
+                        "cpu_percent": (cpu - last_cpu) * 100 / elapsed,
+                    }, buffer.pts // 1000)
                 print(f"encoder={encoder} capture_buffers={(count - last_captured) / elapsed:.1f} "
                       f"encoded/sent={(frames - last_frames) / elapsed:.1f} FPS "
                       f"rate_dropped={rate_dropped - last_rate_dropped} "
@@ -187,6 +213,21 @@ def _stream_pipeline(Gst, connection, args, monitor, encoder, send_header):
                 last_report = now
                 last_cpu, last_frames, last_captured, sent_bytes = cpu, frames, count, 0
                 last_rate_dropped, max_send_seconds = rate_dropped, 0
+            if duration and now - started_at >= duration:
+                elapsed = now - started_at
+                if diagnostics:
+                    write_test_complete(connection, test_id, duration, elapsed, buffer.pts // 1000)
+                result = {
+                    "test_id": test_id, "duration_seconds": duration,
+                    "elapsed_seconds": elapsed, "frames": frames,
+                    "encoded_fps": (frames - 1) / elapsed,
+                    "bitrate_mbps": total_bytes * 8 / elapsed / 1e6,
+                    "encoder": encoder, "source": args.source,
+                    "width": args.width, "height": args.height, "fps": args.fps,
+                    "scope": "host video; compare with Android diagnostics for decoding/presentation",
+                }
+                print("TEST_RESULT " + json.dumps(result, allow_nan=False, sort_keys=True), flush=True)
+                return result
     except RuntimeError as exc:
         if frames == 0:
             raise EncoderStartupError(str(exc)) from exc

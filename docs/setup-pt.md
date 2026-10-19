@@ -95,8 +95,10 @@ frequência reportada do painel. São indicadores
 distintos; os callbacks não comprovam, por si só, 144 imagens diferentes no painel.
 Ainda não existe medição de latência ponta a ponta.
 
-A branch `main` mostra apenas a imagem. Para ver também as informações no tablet,
-compila e instala o APK da branch `debug`.
+A branch `main` inclui os controlos de diagnóstico no computador. Depois de ligar,
+usa **Mostrar métricas no tablet** para ver as informações e **Testar ligação (10 s)**
+para executar o teste automático de barras RGB. O resultado aparece no computador
+e o monitor estendido é reposto no fim. Consulta o [guia de diagnóstico](diagnostics.md).
 
 Para vários dispositivos usa `./scripts/usb-connect.sh -s SERIAL` e
 `adb -s SERIAL install -r android/app/build/outputs/apk/debug/app-debug.apk`.
