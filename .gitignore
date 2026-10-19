@@ -5,6 +5,7 @@ __pycache__/
 *.egg-info/
 .idea/
 .gradle/
+.kotlin/
 **/build/
 local.properties
 *.apk

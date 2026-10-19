@@ -3,6 +3,10 @@
 An open-source project to use Android tablets as extended displays for Linux over
 USB, targeting up to 144 Hz. MIT licensed.
 
+Download the tablet APK from [OpenPadDisplay v1.0.0](https://github.com/Paulo-Lacerda1/OpenPadDisplay/releases/tag/v1.0.0).
+Install `OpenPadDisplay-1.0.0-debug.apk` on Android 11 or newer, then follow
+the [Linux setup guide](docs/setup-pt.md). The APK uses a development signature.
+
 **Current status: extended desktop prototype for GNOME Wayland.** The Linux
 server can create a real virtual monitor with Mutter, capture it through
 PipeWire, and send H.264 video to Android through ADB reverse. A moving test

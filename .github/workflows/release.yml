@@ -1,0 +1,74 @@
+name: Publish release
+
+on:
+  push:
+    tags: ['v[0-9]*']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # Publish the locally verified APK to retain its existing signing certificate.
+      # Never commit the keystore or replace it with a runner-generated debug key.
+      - name: Verify release files
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version="${RELEASE_TAG#v}"
+          grep -Fq "versionName = \"$version\"" android/app/build.gradle.kts
+          test -s "docs/releases/$RELEASE_TAG.md"
+          cd "dist/$RELEASE_TAG"
+          sha256sum --check --strict SHA256SUMS
+          unzip -t "OpenPadDisplay-$version-debug.apk"
+      - name: Publish APK and checksums
+        id: publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version="${RELEASE_TAG#v}"
+          apk="dist/$RELEASE_TAG/OpenPadDisplay-$version-debug.apk"
+          sums="dist/$RELEASE_TAG/SHA256SUMS"
+          if gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft > /tmp/release-draft; then
+            test "$(cat /tmp/release-draft)" = true
+            gh release upload "$RELEASE_TAG" "$apk" "$sums" --clobber
+          else
+            gh release create "$RELEASE_TAG" "$apk" "$sums" --verify-tag --draft \
+              --title "OpenPadDisplay $RELEASE_TAG" --notes-file "docs/releases/$RELEASE_TAG.md"
+          fi
+          gh release edit "$RELEASE_TAG" --draft=false --prerelease=false --latest
+          gh release view "$RELEASE_TAG" --json url,tagName,isDraft,isPrerelease,assets > /tmp/release-receipt.json
+      # An SSH-only maintainer can inspect this receipt without an API token.
+      - name: Record publication result in Git notes
+        if: always()
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+          PUBLISH_OUTCOME: ${{ steps.publish.outcome }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          path = Path('/tmp/release-receipt.json')
+          receipt = json.loads(path.read_text()) if path.exists() else {}
+          receipt.update(outcome=os.environ['PUBLISH_OUTCOME'], tag=os.environ['RELEASE_TAG'],
+                         run_url=f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}")
+          path.write_text(json.dumps(receipt, indent=2) + '\n')
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch origin refs/notes/releases:refs/notes/releases || true
+          git notes --ref=releases add -f -F /tmp/release-receipt.json "$GITHUB_SHA"
+          git push origin refs/notes/releases
